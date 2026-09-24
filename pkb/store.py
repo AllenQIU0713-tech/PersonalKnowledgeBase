@@ -83,6 +83,7 @@ class Store:
             return self.get(identifier)
 
     def set_chunks(self, db, identifier, pages):
+        self.clean_answers(db, identifier)
         db.execute('DELETE FROM chunks WHERE document_id=?', (identifier,))
         position = 0
         for page, text in pages:
@@ -142,12 +143,18 @@ class Store:
                 raise KeyError('资料不存在')
             if privacy == 'local':
                 self.clean_answers(db, identifier)
+                if db.execute("SELECT 1 FROM sqlite_master WHERE name='memories'").fetchone():
+                    from .memories import Memories
+                    for row in db.execute('SELECT memory_id FROM memory_sources WHERE document_id=?',(identifier,)).fetchall():
+                        Memories.clean_answers(db,row[0])
+                        db.execute("UPDATE memories SET privacy='local' WHERE id=?",(row[0],))
             db.execute('UPDATE documents SET privacy=? WHERE id=?', (privacy, identifier))
         return self.get(identifier)
 
     def delete(self, identifier):
         with self.lock, self.connect() as db:
             self.clean_answers(db, identifier)
+            self.clean_memories(db, identifier)
             db.execute('INSERT OR REPLACE INTO tombstones VALUES (?,?)', (identifier, now()))
             db.execute('DELETE FROM documents WHERE id=?', (identifier,))
         (self.root / 'originals' / identifier).unlink(missing_ok=True)
@@ -162,3 +169,12 @@ class Store:
         for row in db.execute('SELECT id,identifiers FROM outbound').fetchall():
             if chunk_ids.intersection(json.loads(row['identifiers'])):
                 db.execute('DELETE FROM outbound WHERE id=?', (row['id'],))
+
+    def clean_memories(self, db, identifier):
+        if not db.execute("SELECT 1 FROM sqlite_master WHERE name='memories'").fetchone():
+            return
+        from .memories import Memories
+        for row in db.execute('SELECT memory_id FROM memory_sources WHERE document_id=?',(identifier,)).fetchall():
+            Memories.clean_answers(db,row[0])
+            db.execute('INSERT OR REPLACE INTO memory_tombstones VALUES (?,?)',(row[0],now()))
+            db.execute('DELETE FROM memories WHERE id=?',(row[0],))

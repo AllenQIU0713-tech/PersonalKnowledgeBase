@@ -1,4 +1,5 @@
 import argparse
+import fcntl
 import base64
 import hmac
 import json
@@ -14,6 +15,7 @@ from .store import Store
 from .extract import Extractor
 from .embedding import Embeddings
 from .answers import Answers
+from .memories import Memories
 
 STATIC = Path(__file__).parent / 'static'
 
@@ -82,6 +84,15 @@ class Handler(BaseHTTPRequestHandler):
             return self.respond(200, file.read_bytes(), (mimetypes.guess_type(str(file))[0] or 'text/plain') + '; charset=utf-8')
         if path == '/api/session' and self.command == 'GET':
             return self.respond(200, {'csrf': self.server.csrf, 'data_dir': str(store.root), 'semantic': self.server.embeddings.status(), 'cloud': False})
+        if path == '/api/memories' and self.command == 'GET':
+            return self.respond(200, {'items': self.server.memories.list()})
+        if path == '/api/memories' and self.command == 'POST':
+            return self.respond(201, self.server.memories.save(body))
+        if path == '/api/memories/update' and self.command == 'POST':
+            return self.respond(200, self.server.memories.save(body, body.get('id')))
+        if path == '/api/memories/delete' and self.command == 'POST':
+            self.server.memories.delete(body.get('id'))
+            return self.respond(200, {'deleted': body.get('id')})
         if path == '/api/answers/preview' and self.command == 'POST':
             with store.lock:
                 return self.respond(200, self.server.answers.context(body.get('question')))
@@ -151,12 +162,20 @@ def main():
     parser.add_argument('--embedding-port', type=int)
     parser.add_argument('--embedding-model', default='')
     args = parser.parse_args()
-    store = Store(data_directory(args.data_dir))
+    root = data_directory(args.data_dir)
+    process_lock = (root / '.process.lock').open('a')
+    try:
+        fcntl.flock(process_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        raise SystemExit('同一资料目录已有服务或备份操作运行')
+    store = Store(root)
     server = ThreadingHTTPServer(('127.0.0.1', args.port), Handler)
     server.store = store
     server.extractor = Extractor(store)
     server.embeddings = Embeddings(store, args.embedding_port, args.embedding_model)
     server.answers = Answers(store, server.embeddings)
+    server.memories = Memories(store)
+    server.answers.memories = server.memories
     server.authority = '127.0.0.1:' + str(server.server_port)
     server.origin = 'http://' + server.authority
     server.bootstrap, server.session, server.csrf = (secrets.token_urlsafe(32) for _ in range(3))
@@ -170,6 +189,7 @@ def main():
         server.extractor.stop.set()
         server.embeddings.stop.set()
         server.server_close()
+        process_lock.close()
 
 
 if __name__ == '__main__':
