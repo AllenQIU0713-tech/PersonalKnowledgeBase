@@ -34,7 +34,10 @@ class Store:
                     position INTEGER NOT NULL, page INTEGER, text TEXT NOT NULL);
                 CREATE INDEX IF NOT EXISTS chunks_document ON chunks(document_id);
                 CREATE TABLE IF NOT EXISTS tombstones (id TEXT PRIMARY KEY, deleted TEXT NOT NULL);
+                CREATE TABLE IF NOT EXISTS pending_cleanup (id TEXT PRIMARY KEY, filename TEXT NOT NULL, error TEXT NOT NULL, created TEXT NOT NULL);
             ''')
+
+        self.recover_deletions()
 
     def connect(self):
         db = sqlite3.connect(str(self.root / 'knowledge.sqlite3'), timeout=15)
@@ -152,12 +155,40 @@ class Store:
         return self.get(identifier)
 
     def delete(self, identifier):
+        if not isinstance(identifier,str) or len(identifier)!=32 or any(c not in '0123456789abcdef' for c in identifier):
+            raise ValueError('资料标识无效')
         with self.lock, self.connect() as db:
+            row = db.execute('SELECT filename FROM documents WHERE id=?',(identifier,)).fetchone()
+            db.execute('INSERT OR IGNORE INTO pending_cleanup VALUES (?,?,?,?)',(identifier,row['filename'] if row else '待清理原件','',now()))
             self.clean_answers(db, identifier)
             self.clean_memories(db, identifier)
             db.execute('INSERT OR REPLACE INTO tombstones VALUES (?,?)', (identifier, now()))
             db.execute('DELETE FROM documents WHERE id=?', (identifier,))
-        (self.root / 'originals' / identifier).unlink(missing_ok=True)
+        return self.finish_delete(identifier)
+
+    def finish_delete(self, identifier):
+        with self.lock:
+            try:
+                (self.root / 'originals' / identifier).unlink(missing_ok=True)
+            except OSError:
+                with self.connect() as db:
+                    db.execute('INSERT OR REPLACE INTO pending_cleanup VALUES (?,?,?,?)',
+                               (identifier,'待清理原件','原件清理失败，请检查目录权限后重试；该资料已禁止检索和下载',now()))
+                return {'deleted':identifier,'cleanup_pending':True}
+            with self.connect() as db:
+                db.execute('DELETE FROM pending_cleanup WHERE id=?',(identifier,))
+            return {'deleted':identifier,'cleanup_pending':False}
+
+    def recover_deletions(self):
+        with self.connect() as db:
+            identifiers = [r[0] for r in db.execute('SELECT id FROM tombstones')]
+        for identifier in identifiers:
+            if isinstance(identifier,str) and len(identifier)==32 and all(c in '0123456789abcdef' for c in identifier):
+                self.finish_delete(identifier)
+
+    def pending_deletions(self):
+        with self.connect() as db:
+            return [dict(r) for r in db.execute('SELECT * FROM pending_cleanup ORDER BY created')]
 
     def clean_answers(self, db, identifier):
         if not db.execute("SELECT 1 FROM sqlite_master WHERE name='answers'").fetchone():

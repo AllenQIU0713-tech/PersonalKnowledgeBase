@@ -114,6 +114,7 @@ def restore_backup(root,source):
             # No execution of backup SQL: copy only whitelisted table values into our schema.
             current=store.connect()
             moved=[]
+            committed=False
             try:
                 with current:
                     for table in ('tombstones','memory_tombstones'):
@@ -192,12 +193,14 @@ def restore_backup(root,source):
                             if all(current.execute("SELECT 1 FROM chunks c JOIN documents d ON d.id=c.document_id WHERE c.id=? AND d.privacy='allowed'",(i,)).fetchone() or current.execute("SELECT 1 FROM memories WHERE id=? AND privacy='allowed'",(i,)).fetchone() for i in identifiers):
                                 current.execute('INSERT OR IGNORE INTO outbound VALUES (?,?,?,?,?,?)',tuple(row[c] for c in ('id','created','purpose','provider','identifiers','simulated')))
                     current.execute("UPDATE documents SET status='queued' WHERE status='processing'")
+                committed=True
                 for identifier in deleted:
-                    (root/'originals'/identifier).unlink(missing_ok=True)
+                    store.finish_delete(identifier)
                 return {'imported':len(imported),'deleted_records_applied':len(deleted),'history':'仅恢复来源仍存在且允许外发的问答；向量由当前模型重建'}
             except Exception:
-                for identifier in moved:
-                    (root/'originals'/identifier).unlink(missing_ok=True)
+                if not committed:
+                    for identifier in moved:
+                        (root/'originals'/identifier).unlink(missing_ok=True)
                 raise
             finally:
                 current.close()

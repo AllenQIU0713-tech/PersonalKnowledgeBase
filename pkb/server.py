@@ -84,6 +84,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.respond(200, file.read_bytes(), (mimetypes.guess_type(str(file))[0] or 'text/plain') + '; charset=utf-8')
         if path == '/api/session' and self.command == 'GET':
             return self.respond(200, {'csrf': self.server.csrf, 'data_dir': str(store.root), 'semantic': self.server.embeddings.status(), 'cloud': False})
+        if path == '/api/cleanup' and self.command == 'GET':
+            return self.respond(200, {'items': store.pending_deletions()})
         if path == '/api/memories' and self.command == 'GET':
             return self.respond(200, {'items': self.server.memories.list()})
         if path == '/api/memories' and self.command == 'POST':
@@ -131,9 +133,7 @@ class Handler(BaseHTTPRequestHandler):
             if len(parts) == 4 and parts[3] == 'retry' and self.command == 'POST':
                 return self.respond(200, self.server.extractor.enqueue(identifier))
             if len(parts) == 4 and parts[3] == 'delete' and self.command == 'POST':
-                store.get(identifier)
-                store.delete(identifier)
-                return self.respond(200, {'deleted': identifier})
+                return self.respond(200, store.delete(identifier))
             if len(parts) == 4 and parts[3] == 'privacy' and self.command == 'POST':
                 return self.respond(200, store.update_privacy(identifier, body.get('privacy')))
         return self.respond(404, {'error': '未找到接口'})
