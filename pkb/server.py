@@ -11,6 +11,8 @@ from pathlib import Path
 
 from .config import MAX_REQUEST, data_directory
 from .store import Store
+from .extract import Extractor
+from .embedding import Embeddings
 
 STATIC = Path(__file__).parent / 'static'
 
@@ -78,16 +80,17 @@ class Handler(BaseHTTPRequestHandler):
             file = STATIC / ('index.html' if path == '/' else path[1:])
             return self.respond(200, file.read_bytes(), (mimetypes.guess_type(str(file))[0] or 'text/plain') + '; charset=utf-8')
         if path == '/api/session' and self.command == 'GET':
-            return self.respond(200, {'csrf': self.server.csrf, 'data_dir': str(store.root), 'semantic': False, 'cloud': False})
+            return self.respond(200, {'csrf': self.server.csrf, 'data_dir': str(store.root), 'semantic': self.server.embeddings.status(), 'cloud': False})
         if path == '/api/documents' and self.command == 'GET':
             query = urllib.parse.parse_qs(parsed.query)
             args = {k: query.get(k, [''])[0] for k in ('query', 'tag', 'since', 'until')}
-            return self.respond(200, {'items': store.search(**args)})
+            return self.respond(200, {'items': self.server.embeddings.search(**args), 'semantic': self.server.embeddings.status()})
         if path == '/api/documents' and self.command == 'POST':
             data = base64.b64decode(body.get('data', ''), validate=True)
             item = store.add(body.get('title', ''), body.get('filename', 'note.txt'), data,
                              body.get('privacy', 'allowed'), body.get('tags', []), body.get('event_time', ''))
-            return self.respond(201, item)
+            self.server.extractor.enqueue(item['id'])
+            return self.respond(201, store.get(item['id']))
         parts = path.strip('/').split('/')
         if len(parts) >= 3 and parts[:2] == ['api', 'documents']:
             identifier = parts[2]
@@ -99,6 +102,8 @@ class Handler(BaseHTTPRequestHandler):
                 item = store.get(identifier)
                 return self.respond(200, (store.root / 'originals' / identifier).read_bytes(), 'application/octet-stream',
                                     {'Content-Disposition': "attachment; filename*=UTF-8''" + urllib.parse.quote(item['filename'], safe='')})
+            if len(parts) == 4 and parts[3] == 'retry' and self.command == 'POST':
+                return self.respond(200, self.server.extractor.enqueue(identifier))
             if len(parts) == 4 and parts[3] == 'delete' and self.command == 'POST':
                 store.get(identifier)
                 store.delete(identifier)
@@ -128,10 +133,14 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--data-dir')
     parser.add_argument('--port', type=int, default=8765)
+    parser.add_argument('--embedding-port', type=int)
+    parser.add_argument('--embedding-model', default='')
     args = parser.parse_args()
     store = Store(data_directory(args.data_dir))
     server = ThreadingHTTPServer(('127.0.0.1', args.port), Handler)
     server.store = store
+    server.extractor = Extractor(store)
+    server.embeddings = Embeddings(store, args.embedding_port, args.embedding_model)
     server.authority = '127.0.0.1:' + str(server.server_port)
     server.origin = 'http://' + server.authority
     server.bootstrap, server.session, server.csrf = (secrets.token_urlsafe(32) for _ in range(3))
@@ -142,6 +151,8 @@ def main():
     except KeyboardInterrupt:
         pass
     finally:
+        server.extractor.stop.set()
+        server.embeddings.stop.set()
         server.server_close()
 
 
