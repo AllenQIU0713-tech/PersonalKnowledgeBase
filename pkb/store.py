@@ -72,7 +72,7 @@ class Store:
                     except UnicodeError:
                         status, error = 'failed', '无法按 UTF-8 解析，可转换编码后重新导入；原件已保留'
                 with self.connect() as db:
-                    db.execute('INSERT INTO documents VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
+                    db.execute('INSERT INTO documents VALUES (?,?,?,?,?,?,?,?,?,?,?)',
                                (identifier, title.strip(), filename, privacy, json.dumps(tags, ensure_ascii=False),
                                 event_time, now(), hashlib.sha256(data).hexdigest(), len(data), status, error))
                     if text is not None:
