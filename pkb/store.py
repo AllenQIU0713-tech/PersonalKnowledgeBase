@@ -140,11 +140,25 @@ class Store:
         with self.lock, self.connect() as db:
             if not db.execute('SELECT 1 FROM documents WHERE id=?', (identifier,)).fetchone():
                 raise KeyError('资料不存在')
+            if privacy == 'local':
+                self.clean_answers(db, identifier)
             db.execute('UPDATE documents SET privacy=? WHERE id=?', (privacy, identifier))
         return self.get(identifier)
 
     def delete(self, identifier):
         with self.lock, self.connect() as db:
+            self.clean_answers(db, identifier)
             db.execute('INSERT OR REPLACE INTO tombstones VALUES (?,?)', (identifier, now()))
             db.execute('DELETE FROM documents WHERE id=?', (identifier,))
         (self.root / 'originals' / identifier).unlink(missing_ok=True)
+
+    def clean_answers(self, db, identifier):
+        if not db.execute("SELECT 1 FROM sqlite_master WHERE name='answers'").fetchone():
+            return
+        answer_ids = [r[0] for r in db.execute('SELECT answer_id FROM answer_sources WHERE document_id=?', (identifier,))]
+        chunk_ids = {r[0] for r in db.execute('SELECT id FROM chunks WHERE document_id=?', (identifier,))}
+        for answer_id in answer_ids:
+            db.execute('DELETE FROM answers WHERE id=?', (answer_id,))
+        for row in db.execute('SELECT id,identifiers FROM outbound').fetchall():
+            if chunk_ids.intersection(json.loads(row['identifiers'])):
+                db.execute('DELETE FROM outbound WHERE id=?', (row['id'],))

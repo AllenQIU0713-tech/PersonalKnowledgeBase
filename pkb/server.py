@@ -13,6 +13,7 @@ from .config import MAX_REQUEST, data_directory
 from .store import Store
 from .extract import Extractor
 from .embedding import Embeddings
+from .answers import Answers
 
 STATIC = Path(__file__).parent / 'static'
 
@@ -81,6 +82,20 @@ class Handler(BaseHTTPRequestHandler):
             return self.respond(200, file.read_bytes(), (mimetypes.guess_type(str(file))[0] or 'text/plain') + '; charset=utf-8')
         if path == '/api/session' and self.command == 'GET':
             return self.respond(200, {'csrf': self.server.csrf, 'data_dir': str(store.root), 'semantic': self.server.embeddings.status(), 'cloud': False})
+        if path == '/api/answers/preview' and self.command == 'POST':
+            with store.lock:
+                return self.respond(200, self.server.answers.context(body.get('question')))
+        if path == '/api/answers/generate' and self.command == 'POST':
+            return self.respond(200, self.server.answers.generate(body.get('question'), body.get('provider')))
+        if path == '/api/answers' and self.command == 'GET':
+            return self.respond(200, {'items': self.server.answers.history()})
+        if path == '/api/outbound' and self.command == 'GET':
+            return self.respond(200, {'items': self.server.answers.records()})
+        if path == '/api/images/preview' and self.command == 'POST':
+            item = store.get(body.get('document_id'))
+            if item['privacy'] != 'allowed':
+                raise ValueError('禁止外发资料不能进行云端图片理解')
+            return self.respond(200, {'enabled': False, 'reason': '真实云端图片服务未配置，当前不会发送图片', 'document_id': item['id']})
         if path == '/api/documents' and self.command == 'GET':
             query = urllib.parse.parse_qs(parsed.query)
             args = {k: query.get(k, [''])[0] for k in ('query', 'tag', 'since', 'until')}
@@ -141,6 +156,7 @@ def main():
     server.store = store
     server.extractor = Extractor(store)
     server.embeddings = Embeddings(store, args.embedding_port, args.embedding_model)
+    server.answers = Answers(store, server.embeddings)
     server.authority = '127.0.0.1:' + str(server.server_port)
     server.origin = 'http://' + server.authority
     server.bootstrap, server.session, server.csrf = (secrets.token_urlsafe(32) for _ in range(3))
