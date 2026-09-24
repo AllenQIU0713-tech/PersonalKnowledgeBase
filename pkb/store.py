@@ -4,7 +4,8 @@ import shutil
 import sqlite3
 import threading
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
+import re
 
 from .config import MAX_FILE, MIN_FREE
 
@@ -56,8 +57,15 @@ class Store:
             raise ValueError('标题须为 1–300 字')
         if not isinstance(filename, str) or len(filename) > 500:
             raise ValueError('文件名无效')
+        if not isinstance(event_time, str):
+            raise ValueError('事件日期须为 YYYY-MM-DD 字符串，未填写时使用空字符串')
         if event_time:
-            datetime.fromisoformat(event_time)
+            if not re.fullmatch(r'[0-9]{4}-[0-9]{2}-[0-9]{2}', event_time):
+                raise ValueError('事件日期须为 YYYY-MM-DD')
+            try:
+                date.fromisoformat(event_time)
+            except ValueError:
+                raise ValueError('事件日期不是有效日期')
         with self.lock:
             if shutil.disk_usage(self.root).free < len(data) + MIN_FREE:
                 raise ValueError('磁盘空间不足，请至少保留 128 MiB')
