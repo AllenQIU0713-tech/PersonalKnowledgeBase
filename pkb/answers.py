@@ -28,6 +28,24 @@ class Answers:
                 CREATE TABLE IF NOT EXISTS outbound (id TEXT PRIMARY KEY, created TEXT NOT NULL, purpose TEXT NOT NULL, provider TEXT NOT NULL, identifiers TEXT NOT NULL, simulated INTEGER NOT NULL);
             ''')
 
+    def reconcile_legacy_sources(self):
+        """One-time cleanup of source-less legacy answers before background extraction."""
+        with self.store.lock, self.store.connect() as db:
+            db.execute('CREATE TABLE IF NOT EXISTS migrations (name TEXT PRIMARY KEY, applied TEXT NOT NULL)')
+            if db.execute("SELECT 1 FROM migrations WHERE name='AUD-B3-001'").fetchone():
+                return
+            # The no-evidence mock answer never includes user source text; preserve it.
+            safe_empty = MockProvider().answer({'sources': []})
+            db.execute("""DELETE FROM answers WHERE answer<>?
+                AND NOT EXISTS (SELECT 1 FROM answer_sources s WHERE s.answer_id=answers.id)
+                AND NOT EXISTS (SELECT 1 FROM answer_memories m WHERE m.answer_id=answers.id)""",(safe_empty,))
+            for row in db.execute('SELECT id,identifiers FROM outbound').fetchall():
+                identifiers=json.loads(row['identifiers'])
+                if any(not db.execute('SELECT 1 FROM chunks WHERE id=?',(i,)).fetchone()
+                       and not db.execute('SELECT 1 FROM memories WHERE id=?',(i,)).fetchone() for i in identifiers):
+                    db.execute('DELETE FROM outbound WHERE id=?',(row['id'],))
+            db.execute('INSERT INTO migrations VALUES (?,?)',('AUD-B3-001',now()))
+
     def context(self, question):
         if not isinstance(question,str) or not question.strip() or len(question)>2000:
             raise ValueError('问题须为 1–2000 字')

@@ -43,6 +43,7 @@ def export_backup(root,destination):
         snapshot=Path(temp)/'knowledge.sqlite3'
         with sqlite3.connect(str(root/'knowledge.sqlite3')) as source, sqlite3.connect(str(snapshot)) as target:
             source.backup(target)
+            target.execute('PRAGMA journal_mode=DELETE')
         with sqlite3.connect(str(snapshot)) as db:
             identifiers=[r[0] for r in db.execute('SELECT id FROM documents')]
         files={'knowledge.sqlite3':snapshot}
@@ -74,8 +75,9 @@ def restore_backup(root,source):
     # Restore merges records; it never rolls current content back or weakens privacy.
     store=Store(root)
     embeddings=Embeddings(store)
-    Answers(store,embeddings)
+    answers=Answers(store,embeddings)
     memories=Memories(store)
+    answers.reconcile_legacy_sources()
     with tempfile.TemporaryDirectory(dir=root) as temp:
         staging=Path(temp)
         with zipfile.ZipFile(source) as archive:
@@ -106,7 +108,9 @@ def restore_backup(root,source):
                 target.parent.mkdir(exist_ok=True)
                 target.write_bytes(data)
                 target.chmod(0o600)
-        incoming=sqlite3.connect('file:'+str(staging/'knowledge.sqlite3')+'?mode=ro',uri=True)
+        # Archive was fully extracted, hash-checked, and is no longer modified.
+        # immutable permits reading older self-contained WAL-header snapshots without sidecars.
+        incoming=sqlite3.connect('file:'+str(staging/'knowledge.sqlite3')+'?mode=ro&immutable=1',uri=True)
         incoming.row_factory=sqlite3.Row
         try:
             if incoming.execute('PRAGMA integrity_check').fetchone()[0]!='ok':
@@ -179,6 +183,8 @@ def restore_backup(root,source):
                                 continue
                             sources=incoming.execute('SELECT document_id,chunk_id FROM answer_sources WHERE answer_id=?',(row['id'],)).fetchall()
                             memory_ids=[r[0] for r in incoming.execute('SELECT memory_id FROM answer_memories WHERE answer_id=?',(row['id'],))] if 'answer_memories' in tables else []
+                            if not sources and not memory_ids:
+                                continue
                             if any(not current.execute("SELECT 1 FROM chunks c JOIN documents d ON d.id=c.document_id WHERE c.id=? AND d.id=? AND d.privacy='allowed'",tuple(s)).fetchone() for s in [(x['chunk_id'],x['document_id']) for x in sources]):
                                 continue
                             if any(not current.execute("SELECT 1 FROM memories WHERE id=? AND privacy='allowed' AND status='confirmed'",(m,)).fetchone() for m in memory_ids):

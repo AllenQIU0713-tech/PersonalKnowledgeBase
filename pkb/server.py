@@ -171,11 +171,12 @@ def main():
     store = Store(root)
     server = ThreadingHTTPServer(('127.0.0.1', args.port), Handler)
     server.store = store
-    server.extractor = Extractor(store)
     server.embeddings = Embeddings(store, args.embedding_port, args.embedding_model)
     server.answers = Answers(store, server.embeddings)
     server.memories = Memories(store)
     server.answers.memories = server.memories
+    server.answers.reconcile_legacy_sources()
+    server.extractor = Extractor(store)
     server.authority = '127.0.0.1:' + str(server.server_port)
     server.origin = 'http://' + server.authority
     server.bootstrap, server.session, server.csrf = (secrets.token_urlsafe(32) for _ in range(3))
