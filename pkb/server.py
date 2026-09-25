@@ -104,6 +104,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.respond(200, {'items': self.server.answers.history()})
         if path == '/api/outbound' and self.command == 'GET':
             return self.respond(200, {'items': self.server.answers.records()})
+        if path == '/api/migrations' and self.command == 'GET':
+            return self.respond(200, {'items': self.server.answers.migration_history()})
         if path == '/api/images/preview' and self.command == 'POST':
             item = store.get(body.get('document_id'))
             if item['privacy'] != 'allowed':
@@ -175,12 +177,17 @@ def main():
     server.answers = Answers(store, server.embeddings)
     server.memories = Memories(store)
     server.answers.memories = server.memories
-    server.answers.reconcile_legacy_sources()
+    server.migration = server.answers.reconcile_legacy_sources()
     server.extractor = Extractor(store)
     server.authority = '127.0.0.1:' + str(server.server_port)
     server.origin = 'http://' + server.authority
     server.bootstrap, server.session, server.csrf = (secrets.token_urlsafe(32) for _ in range(3))
     print('资料目录：' + str(store.root), flush=True)
+    if server.migration and (server.migration['answers_removed'] or
+                             server.migration['outbound_removed']):
+        print('旧历史迁移：清理问答 %d 条、外发记录 %d 条；原件、索引和个人记忆保留。' %
+              (server.migration['answers_removed'],
+               server.migration['outbound_removed']), flush=True)
     print('请用浏览器打开（一次性链接）：' + server.origin + '/unlock?token=' + server.bootstrap, flush=True)
     try:
         server.serve_forever()

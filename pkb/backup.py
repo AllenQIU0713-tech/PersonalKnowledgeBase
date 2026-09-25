@@ -18,6 +18,7 @@ from .answers import Answers
 from .memories import Memories
 
 MAX_BACKUP = 2 * 1024**3
+HISTORY_SCHEMA = 2
 
 
 @contextmanager
@@ -35,6 +36,12 @@ def exclusive(root):
 
 
 def export_backup(root,destination):
+    store=Store(root)
+    embeddings=Embeddings(store)
+    answers=Answers(store,embeddings)
+    memories=Memories(store)
+    answers.memories=memories
+    answers.reconcile_legacy_sources()
     destination=Path(destination).expanduser().resolve()
     destination.parent.mkdir(parents=True,exist_ok=True)
     if destination.exists():
@@ -54,7 +61,7 @@ def export_backup(root,destination):
             raise ValueError('本版备份上限为 2 GiB，请减少资料或另行备份数据目录')
         if shutil.disk_usage(destination.parent).free<sum(sizes.values())+MIN_FREE:
             raise ValueError('备份目标空间不足')
-        manifest={'format':1,'created':now(),'files':{name:{'size':sizes[name],'sha256':hashlib.sha256(path.read_bytes()).hexdigest()} for name,path in files.items()}}
+        manifest={'format':1,'history_schema':HISTORY_SCHEMA,'created':now(),'files':{name:{'size':sizes[name],'sha256':hashlib.sha256(path.read_bytes()).hexdigest()} for name,path in files.items()}}
         destination.parent.mkdir(parents=True,exist_ok=True)
         partial=destination.with_name(destination.name+'.partial')
         try:
@@ -92,6 +99,7 @@ def restore_backup(root,source):
             if manifest.get('format')!=1 or not isinstance(manifest.get('files'),dict):
                 raise ValueError('不支持的备份格式')
             files=manifest['files']
+            history_import_allowed=manifest.get('history_schema')==HISTORY_SCHEMA
             if set(names)!=set(files)|{'manifest.json'} or 'knowledge.sqlite3' not in files:
                 raise ValueError('备份文件与清单不一致')
             if shutil.disk_usage(root).free<sum(i.file_size for i in archive.infolist())*2+MIN_FREE:
@@ -177,7 +185,16 @@ def restore_backup(root,source):
                                 current.execute('INSERT INTO memory_sources VALUES (?,?)',(identifier,s))
                             for h in incoming.execute('SELECT * FROM memory_history WHERE memory_id=?',(identifier,)):
                                 current.execute('INSERT INTO memory_history VALUES (?,?,?,?)',tuple(h[c] for c in ('id','memory_id','changed','snapshot')))
-                    if {'answers','answer_sources','outbound'}<=tables:
+                    legacy_answers_skipped = 0
+                    legacy_outbound_skipped = 0
+                    if not history_import_allowed:
+                        if 'answers' in tables:
+                            legacy_answers_skipped = incoming.execute(
+                                'SELECT COUNT(*) FROM answers').fetchone()[0]
+                        if 'outbound' in tables:
+                            legacy_outbound_skipped = incoming.execute(
+                                'SELECT COUNT(*) FROM outbound').fetchone()[0]
+                    if history_import_allowed and {'answers','answer_sources','outbound'}<=tables:
                         for row in incoming.execute('SELECT * FROM answers'):
                             if current.execute('SELECT 1 FROM answers WHERE id=?',(row['id'],)).fetchone():
                                 continue
@@ -202,7 +219,17 @@ def restore_backup(root,source):
                 committed=True
                 for identifier in deleted:
                     store.finish_delete(identifier)
-                return {'imported':len(imported),'deleted_records_applied':len(deleted),'history':'仅恢复来源仍存在且允许外发的问答；向量由当前模型重建'}
+                history = ('仅恢复安全版本备份中来源仍存在且允许外发的问答；'
+                           '向量由当前模型重建')
+                if not history_import_allowed:
+                    history = ('旧备份的问答历史与外发记录未导入；原件、索引和个人记忆已按规则恢复')
+                return {
+                    'imported': len(imported),
+                    'deleted_records_applied': len(deleted),
+                    'legacy_answers_skipped': legacy_answers_skipped,
+                    'legacy_outbound_skipped': legacy_outbound_skipped,
+                    'history': history,
+                }
             except Exception:
                 if not committed:
                     for identifier in moved:

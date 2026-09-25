@@ -29,22 +29,52 @@ class Answers:
             ''')
 
     def reconcile_legacy_sources(self):
-        """One-time cleanup of source-less legacy answers before background extraction."""
+        """Apply the user-approved one-time cleanup for pre-v2 answer history."""
         with self.store.lock, self.store.connect() as db:
-            db.execute('CREATE TABLE IF NOT EXISTS migrations (name TEXT PRIMARY KEY, applied TEXT NOT NULL)')
-            if db.execute("SELECT 1 FROM migrations WHERE name='AUD-B3-001'").fetchone():
-                return
-            # The no-evidence mock answer never includes user source text; preserve it.
-            safe_empty = MockProvider().answer({'sources': []})
-            db.execute("""DELETE FROM answers WHERE answer<>?
-                AND NOT EXISTS (SELECT 1 FROM answer_sources s WHERE s.answer_id=answers.id)
-                AND NOT EXISTS (SELECT 1 FROM answer_memories m WHERE m.answer_id=answers.id)""",(safe_empty,))
-            for row in db.execute('SELECT id,identifiers FROM outbound').fetchall():
-                identifiers=json.loads(row['identifiers'])
-                if any(not db.execute('SELECT 1 FROM chunks WHERE id=?',(i,)).fetchone()
-                       and not db.execute('SELECT 1 FROM memories WHERE id=?',(i,)).fetchone() for i in identifiers):
-                    db.execute('DELETE FROM outbound WHERE id=?',(row['id'],))
-            db.execute('INSERT INTO migrations VALUES (?,?)',('AUD-B3-001',now()))
+            db.executescript('''
+                CREATE TABLE IF NOT EXISTS migrations (
+                    name TEXT PRIMARY KEY, applied TEXT NOT NULL);
+                CREATE TABLE IF NOT EXISTS migration_log (
+                    name TEXT PRIMARY KEY, applied TEXT NOT NULL,
+                    answers_removed INTEGER NOT NULL,
+                    outbound_removed INTEGER NOT NULL,
+                    note TEXT NOT NULL);
+            ''')
+            name = 'AUD-B3-001-clear-legacy-history-v2'
+            existing = db.execute(
+                'SELECT * FROM migration_log WHERE name=?', (name,)
+            ).fetchone()
+            if existing:
+                return dict(existing)
+
+            answers_removed = db.execute('SELECT COUNT(*) FROM answers').fetchone()[0]
+            outbound_removed = db.execute('SELECT COUNT(*) FROM outbound').fetchone()[0]
+            # Product decision 2026-09-25: affected installations contain only
+            # synthetic data. Remove all history produced by the defective schema;
+            # documents, chunks, vectors, and personal memories remain untouched.
+            db.execute('DELETE FROM answers')
+            db.execute('DELETE FROM outbound')
+            applied = now()
+            note = ('已按产品决策清空缺陷旧版本的问答历史与外发记录；'
+                    '原件、索引和个人记忆未清理')
+            db.execute(
+                'INSERT INTO migration_log VALUES (?,?,?,?,?)',
+                (name, applied, answers_removed, outbound_removed, note))
+            db.execute(
+                'INSERT OR REPLACE INTO migrations VALUES (?,?)', (name, applied))
+            return {
+                'name': name, 'applied': applied,
+                'answers_removed': answers_removed,
+                'outbound_removed': outbound_removed, 'note': note,
+            }
+
+    def migration_history(self):
+        with self.store.connect() as db:
+            if not db.execute(
+                    "SELECT 1 FROM sqlite_master WHERE name='migration_log'").fetchone():
+                return []
+            return [dict(row) for row in db.execute(
+                'SELECT * FROM migration_log ORDER BY applied DESC')]
 
     def context(self, question):
         if not isinstance(question,str) or not question.strip() or len(question)>2000:
