@@ -215,6 +215,11 @@ def restore_backup(root,source):
                             identifiers=json.loads(row['identifiers'])
                             if all(current.execute("SELECT 1 FROM chunks c JOIN documents d ON d.id=c.document_id WHERE c.id=? AND d.privacy='allowed'",(i,)).fetchone() or current.execute("SELECT 1 FROM memories WHERE id=? AND privacy='allowed'",(i,)).fetchone() for i in identifiers):
                                 current.execute('INSERT OR IGNORE INTO outbound VALUES (?,?,?,?,?,?)',tuple(row[c] for c in ('id','created','purpose','provider','identifiers','simulated')))
+                        if 'cloud_requests' in tables:
+                            for row in incoming.execute('SELECT * FROM cloud_requests'):
+                                identifiers=json.loads(row['identifiers'])
+                                if all(current.execute("SELECT 1 FROM chunks c JOIN documents d ON d.id=c.document_id WHERE c.id=? AND d.privacy='allowed'",(i,)).fetchone() or current.execute("SELECT 1 FROM memories WHERE id=? AND privacy='allowed'",(i,)).fetchone() for i in identifiers):
+                                    current.execute('INSERT OR IGNORE INTO cloud_requests VALUES (?,?,?,?,?,?,?,?,?,?)',tuple(row[c] for c in ('id','created','confirmation_id','purpose','provider','model','destination','identifiers','payload_hash','status')))
                     current.execute("UPDATE documents SET status='queued' WHERE status='processing'")
                 committed=True
                 for identifier in deleted:

@@ -208,6 +208,10 @@ class Store:
         for row in db.execute('SELECT id,identifiers FROM outbound').fetchall():
             if chunk_ids.intersection(json.loads(row['identifiers'])):
                 db.execute('DELETE FROM outbound WHERE id=?', (row['id'],))
+        if db.execute("SELECT 1 FROM sqlite_master WHERE name='cloud_requests'").fetchone():
+            for row in db.execute('SELECT id,identifiers FROM cloud_requests').fetchall():
+                if chunk_ids.intersection(json.loads(row['identifiers'])):
+                    db.execute('DELETE FROM cloud_requests WHERE id=?', (row['id'],))
 
     def clean_memories(self, db, identifier):
         if not db.execute("SELECT 1 FROM sqlite_master WHERE name='memories'").fetchone():

@@ -14,7 +14,7 @@ from .config import MAX_REQUEST, data_directory
 from .store import Store
 from .extract import Extractor
 from .embedding import Embeddings
-from .answers import Answers
+from .answers import Answers, CloudError
 from .memories import Memories
 
 STATIC = Path(__file__).parent / 'static'
@@ -83,7 +83,9 @@ class Handler(BaseHTTPRequestHandler):
             file = STATIC / ('index.html' if path == '/' else path[1:])
             return self.respond(200, file.read_bytes(), (mimetypes.guess_type(str(file))[0] or 'text/plain') + '; charset=utf-8')
         if path == '/api/session' and self.command == 'GET':
-            return self.respond(200, {'csrf': self.server.csrf, 'data_dir': str(store.root), 'semantic': self.server.embeddings.status(), 'cloud': False})
+            return self.respond(200, {'csrf': self.server.csrf, 'data_dir': str(store.root),
+                                      'semantic': self.server.embeddings.status(),
+                                      'cloud': self.server.answers.cloud_status()})
         if path == '/api/cleanup' and self.command == 'GET':
             return self.respond(200, {'items': store.pending_deletions()})
         if path == '/api/memories' and self.command == 'GET':
@@ -100,6 +102,13 @@ class Handler(BaseHTTPRequestHandler):
                 return self.respond(200, self.server.answers.context(body.get('question')))
         if path == '/api/answers/generate' and self.command == 'POST':
             return self.respond(200, self.server.answers.generate(body.get('question'), body.get('provider')))
+        if path == '/api/cloud/prepare' and self.command == 'POST':
+            return self.respond(200, self.server.answers.prepare(
+                body.get('question'), body.get('selected_chunk_ids'), body.get('model')))
+        if path == '/api/cloud/confirm' and self.command == 'POST':
+            return self.respond(200, self.server.answers.confirm(body.get('confirmation_token')))
+        if path == '/api/cloud/cancel' and self.command == 'POST':
+            return self.respond(200, self.server.answers.cancel(body.get('confirmation_token')))
         if path == '/api/answers' and self.command == 'GET':
             return self.respond(200, {'items': self.server.answers.history()})
         if path == '/api/outbound' and self.command == 'GET':
@@ -148,6 +157,8 @@ class Handler(BaseHTTPRequestHandler):
             self.respond(404, {'error': '资料不存在'})
         except (ValueError, TypeError, UnicodeError) as exc:
             self.respond(400, {'error': str(exc)[:300]})
+        except CloudError as exc:
+            self.respond(502, {'error': str(exc)[:300]})
         except (BrokenPipeError, ConnectionResetError, TimeoutError):
             pass
         except Exception:
