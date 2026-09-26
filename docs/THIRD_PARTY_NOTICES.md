@@ -39,6 +39,12 @@
 
 libomp 的许可证及通知以 LLVM 23.1.2 的 `LICENSE.TXT` 为准，其中包含 Apache License 2.0 正文、LLVM Exceptions 以及所含第三方软件通知。本机文件 SHA256 为 `8d85c1057d742e597985c7d4e6320b015a9139385cff4cbae06ffc0ebe89afee`；固定上游入口：`https://github.com/llvm/llvm-project/blob/llvmorg-23.1.2/LICENSE.TXT`。
 
+其余运行时依赖已逐项与本机安装内容复核：
+
+- ggml 0.25.3 的本机 `LICENSE` 为 MIT，SHA256 `94f29bbed6a22c35b992c5c6ebf0e7c92f13b836b90f36f461c9cf2f0f1d010d`；固定上游入口：`https://github.com/ggml-org/ggml/blob/v0.25.3/LICENSE`。
+- openssl@3 3.6.4 的本机 `LICENSE.txt` 为 Apache License 2.0，SHA256 `7d5450cb2d142651b8afa315b5f238efc805dad827d91ba367d8516bc9d49e7a`；固定上游入口：`https://github.com/openssl/openssl/blob/openssl-3.6.4/LICENSE.txt`。
+- ca-certificates 2026-09-25 的本机 `cacert.pem` SHA256 为 `a41b5d356aea97a529fe27e0f7316d2f9d946d75927476cf9cf1b90637d00505`，与固定下载包摘要一致；Homebrew SPDX SBOM 将许可证结论记录为 MPL-2.0。该 SBOM 的 SHA256 为 `43857df969e708b7d93dd2e02c8084cb9dbb649d5f4d01fcba8dc60b61da220f`，文档命名空间为 `https://formulae.brew.sh/spdx/ca-certificates-2026-09-25.json`。
+
 ## DeepSeek 官方 API
 
 DeepSeek 是运行时外部服务，不是随项目分发的软件组件。固定接收地址为 `https://api.deepseek.com/chat/completions`。适用文件入口：
