@@ -33,9 +33,11 @@
 | 组件 | 版本 | 许可证 | 上游来源或发布包 SHA256 |
 | --- | --- | --- | --- |
 | ggml | 0.25.3 | MIT | `https://github.com/ggml-org/ggml`；源码包 `cd9b92d5652f5e4abb41603bf59e269f8fec1b2d05ce22fded981064dd25fb89` |
-| libomp | 23.1.2 | MIT | LLVM 23.1.2 源码包 `c98bbef08a2b4c2613cd50e9aa9ae7b69b1fe6c16b2c40373bc0ab6116fdf78a` |
+| libomp | 23.1.2 | Apache-2.0 WITH LLVM-exception | LLVM 23.1.2 源码包 `c98bbef08a2b4c2613cd50e9aa9ae7b69b1fe6c16b2c40373bc0ab6116fdf78a` |
 | openssl@3 | 3.6.4 | Apache-2.0 | OpenSSL 3.6.4 源码包 `9bffaa1ad1e07b354c21bd3324ec02fa15579f45a7d0494b3e74bc449b7333ef` |
 | ca-certificates | 2026-09-25 | MPL-2.0 | Mozilla CA bundle `a41b5d356aea97a529fe27e0f7316d2f9d946d75927476cf9cf1b90637d00505` |
+
+libomp 的许可证及通知以 LLVM 23.1.2 的 `LICENSE.TXT` 为准，其中包含 Apache License 2.0 正文、LLVM Exceptions 以及所含第三方软件通知。本机文件 SHA256 为 `8d85c1057d742e597985c7d4e6320b015a9139385cff4cbae06ffc0ebe89afee`；固定上游入口：`https://github.com/llvm/llvm-project/blob/llvmorg-23.1.2/LICENSE.TXT`。
 
 ## DeepSeek 官方 API
 
