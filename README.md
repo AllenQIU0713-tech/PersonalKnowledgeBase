@@ -36,13 +36,15 @@ sh scripts/build-extractor.sh
 
 ## 本地向量服务
 
-安装 llama.cpp 并从 Qwen 官方下载 `Qwen3-Embedding-0.6B-GGUF` 模型属于首次联网维护操作，不会由应用自动触发。模型下载到应用支持目录或自行选择的非同步目录。按 [Qwen 官方说明](https://huggingface.co/Qwen/Qwen3-Embedding-0.6B-GGUF) 启动：
+安装 llama.cpp 并从 Qwen 官方下载 `Qwen3-Embedding-0.6B-GGUF` 模型属于首次联网维护操作，不会由应用自动触发。模型下载到应用支持目录或自行选择的非同步目录。当前核准文件为官方仓库修订 `370f27d7550e0def9b39c1f16d3fbaa13aa67728` 的 `Qwen3-Embedding-0.6B-Q8_0.gguf`（639,150,592 字节，SHA256 `06507c7b42688469c4e7298b0a1e16deff06caf291cf0a5b278c308249c3e439`）。完整来源和许可证见 [第三方组件与来源记录](docs/THIRD_PARTY_NOTICES.md)。按 [Qwen 官方说明](https://huggingface.co/Qwen/Qwen3-Embedding-0.6B-GGUF) 启动：
 
 ```sh
 llama-server -m /absolute/path/model.gguf --embedding --pooling last -ub 8192 -c 4096 -np 1 --host 127.0.0.1 --port 8766
 shasum -a 256 /absolute/path/model.gguf
 python3 -m pkb.server --embedding-port 8766 --embedding-model '填入上述模型SHA256'
 ```
+
+若需重新下载，使用固定修订地址：`https://huggingface.co/Qwen/Qwen3-Embedding-0.6B-GGUF/resolve/370f27d7550e0def9b39c1f16d3fbaa13aa67728/Qwen3-Embedding-0.6B-Q8_0.gguf`。下载完成后必须核对上述大小与 SHA256；不符合时不要启动。
 
 `-c 4096 -np 1` 把向量服务限制为一个 4096 token 上下文槽，覆盖本产品单片段最多 800 字、查询最多 1000 字的输入上限。不要省略这两个参数：llama.cpp 0.5.0 的默认值会创建四个 32768 token 槽，实测内存占用约 14.0 GiB；上述单槽配置在同一模型上约 1.18 GiB。
 
