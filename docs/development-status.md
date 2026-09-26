@@ -26,3 +26,5 @@
 追加：审计对 c5a8218 登记 `BUG-B5-001` 与 `AUD-B5-001`。前者已在 6c7d6a8 修正；后者根因为交付遗漏第三方来源与许可证链。开发新增 `docs/THIRD_PARTY_NOTICES.md`，固定 Qwen 官方仓库修订、LFS 摘要、量化/基础模型/许可证，以及 llama.cpp 上游提交、Homebrew 公式和 bottle 摘要、MIT 通知与运行时依赖。待固定新提交后交测试核对、审计复审。
 
 追加：测试核对 d844bfd 时发现 `AUD-B5-001-1`：libomp 23.1.2 被误标为 MIT。开发已按本机 `LICENSE.TXT` 更正为 `Apache-2.0 WITH LLVM-exception`，补充许可证文件 SHA256、固定上游入口及第三方通知范围；同时逐项读取并记录 ggml、OpenSSL 的本机许可证摘要及 CA bundle 的 Homebrew SPDX SBOM，待固定提交复测。
+
+追加：B5 完整版本 b59b552 已经测试核对并获审计附条件通过，`BUG-B5-001`、`AUD-B5-001`、`AUD-B5-001-1` 全部关闭。开发新增 V1.1 完整交付候选说明，覆盖 B1–B5、运行入口、证据、限制和最终放行条件。当前唯一已知阻塞为 Chrome 远程调试授权后的确认页实机验收；随后须对同一最终提交执行整体回归与最终审计。
