@@ -66,9 +66,16 @@ class Embeddings:
         return {'enabled': bool(self.port), 'model': self.model, 'total': total, 'indexed': indexed, 'error': self.error}
 
     def search(self, query, tag='', since='', until=''):
+        items, _ = self.search_with_mode(query, tag, since, until)
+        return items
+
+    def search_with_mode(self, query, tag='', since='', until=''):
         lexical = self.store.search(query, tag, since, until)
         if not self.port or not query.strip():
-            return lexical
+            return lexical, {
+                'mode': 'keyword',
+                'reason': '本地语义模型尚未启用，本次仅使用关键词检索。',
+            }
         try:
             vector = self.encode(query, query=True)
             with self.store.connect() as db:
@@ -102,7 +109,13 @@ class Embeddings:
                 item.update(excerpt=row['text'][:400], chunk_id=row['id'], page=row['page'])
                 items.setdefault(identifier,item)
             self.error = ''
-            return [items[k] for k in sorted(scores,key=scores.get,reverse=True)][:100]
+            return [items[k] for k in sorted(scores,key=scores.get,reverse=True)][:100], {
+                'mode': 'semantic',
+                'reason': '本次使用本地语义检索与关键词检索。',
+            }
         except Exception:
             self.error = '语义检索不可用，当前结果仅使用关键词'
-            return lexical
+            return lexical, {
+                'mode': 'keyword_fallback',
+                'reason': '本地语义检索暂不可用，本次已回退到关键词检索。',
+            }

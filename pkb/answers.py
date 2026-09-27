@@ -150,7 +150,8 @@ class Answers:
             raise ValueError('问题须为 1–2000 字')
         question = question.strip()
         sources, excluded, budget = [], False, 6000
-        for item in self.embeddings.search(question):
+        items, retrieval = self.embeddings.search_with_mode(question)
+        for item in items:
             if item['privacy'] == 'local':
                 excluded = True
                 continue
@@ -166,7 +167,7 @@ class Answers:
                 budget -= len(text)
                 sources.append({'document_id': item['id'], 'chunk_id': chunk['id'],
                                 'title': document['title'], 'page': chunk['page'], 'text': text})
-        return {'question': question, 'sources': sources,
+        return {'question': question, 'sources': sources, 'retrieval': retrieval,
                 'memories': self.memories.eligible(question) if self.memories else [],
                 'has_excluded_local': excluded, 'history': [],
                 'history_policy': '不发送历史消息；每次从当前允许外发资料重新组装。',
