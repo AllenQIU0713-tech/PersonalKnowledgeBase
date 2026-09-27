@@ -78,10 +78,18 @@ class MockProvider:
     name = '离线模拟（无网络）'
 
     def answer(self, context):
-        if not context['sources']:
-            return '【离线模拟，未调用模型】没有可外发的资料证据，无法生成有依据的回答。'
-        return '【离线模拟，未调用模型】以下仅展示允许使用的资料片段，不是模型建议：\n\n' + '\n\n'.join(
-            '[%d] %s' % (i + 1, source['text']) for i, source in enumerate(context['sources']))
+        sources, memories = context['sources'], context['memories']
+        if not sources and not memories:
+            return '【离线模拟，未调用模型】没有符合当前使用条件的资料片段或个人记忆，无法生成有依据的回答；这不是模型建议。'
+        sections = ['【离线模拟，未调用模型】以下仅展示本次允许使用的本地证据，不是模型建议。']
+        if sources:
+            sections.append('资料片段：\n' + '\n\n'.join(
+                '[资料 %d] %s' % (i + 1, source['text']) for i, source in enumerate(sources)))
+        if memories:
+            sections.append('个人记忆：\n' + '\n\n'.join(
+                '[记忆 %d｜%s] %s' % (i + 1, memory['topic'], memory['text'])
+                for i, memory in enumerate(memories)))
+        return '\n\n'.join(sections)
 
 
 class Answers:
