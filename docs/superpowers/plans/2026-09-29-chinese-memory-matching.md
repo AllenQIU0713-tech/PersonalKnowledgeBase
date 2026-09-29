@@ -1,115 +1,30 @@
-# BUG-V11-004 Chinese Memory Matching Implementation Plan
+# BUG-V11-004 中文记忆检索实施计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+**目标：** 按 `docs/superpowers/specs/2026-09-29-memory-retrieval-contract.md` R2 修复连续中文记忆检索，并向独立测试交付固定提交。
 
-**Goal:** Select eligible Chinese memories with deterministic topic, intent, and business-identifier matching while controlling false recall.
+**范围：** 只修改本地记忆资格过滤后的词面匹配、排序和开发交接文档。不修改云端 payload、逐次确认、离线模拟渲染、关联清理或网络行为。
 
-**Architecture:** Add pure normalization and scoring helpers to `pkb/memories.py`. Keep qualification and privacy checks in `Memories.eligible()`, score every qualified item, sort deterministically, and only then return the first five.
+## 1. 实现确定性匹配管线
 
-**Tech Stack:** Python 3 standard library (`re`, `unicodedata`).
+- [x] 中文比较副本使用 NFKC、casefold，并仅保留 Unicode 字母和数字。
+- [x] 问句只清理批准的前缀“请问/请告诉我”和后缀“是什么/吗”。
+- [x] 标题按 R2 封闭清单最长优先裁剪一次；包含完整后缀“活动记录”，不递归裁剪。
+- [x] 2–3 字非通用完整主题只在未清理套话前与完整问题相等时命中。
+- [x] 业务编号在去标点前提取，支持 ASCII `-`/`_`，只采用 NFKC 自带归一化，并执行完整 token 边界比较。
+- [x] 查询含业务编号时要求候选至少有一个精确编号，不允许主题匹配绕过错误编号。
+- [x] 完整主题、主题核心和编号的非空意图统一执行去重 4 字窗口、至少一半覆盖、末窗命中和批次限定词一致校验。
 
-**Spec:** `docs/superpowers/specs/2026-09-29-chinese-memory-matching-design.md`
+## 2. 保持资格和确定性排序
 
-## Global Constraints
+- [x] 在相关性评分前排除 pending、inactive、local、冲突和来源不可用或隐私收紧的记忆。
+- [x] 来源读取异常按保守方式排除该记忆，不放行也不中断整个检索。
+- [x] 对全部合格候选评分，再按档位、精确覆盖分数、锚点长度、updated 和 id 排序，最后截取 5 条。
+- [x] 保持返回字段 `id/topic/text/sources` 不变，不新增外发内容。
 
-- Preserve confirmed/allowed/no-conflict/source-allowed qualification before relevance scoring.
-- Do not change offline rendering, cloud payloads, confirmation, endpoints, dependencies, or outbound persistence.
-- Do not edit or commit `docs/testing/`, `docs/audit/`, or `docs/acceptance/`.
-- Development performs syntax and diff checks; independent testing owns functional regression.
+## 3. 固定交付并串联独立测试
 
----
-
-### Task 1: Add deterministic local matching helpers
-
-**Files:**
-- Modify: `pkb/memories.py`
-
-**Interfaces:**
-- Produces: `_compact(text) -> str` for NFKC/casefold Unicode letter-and-number normalization.
-- Produces: `_question_text(question) -> str` with one explicit prefix and suffix removed.
-- Produces: `_topic_core(topic) -> str` with one longest title suffix removed.
-- Produces: `_business_ids(text) -> set[str]` with exact letter-and-digit identifier tokens.
-- Produces: `_intent_match(question, anchor, body) -> (coverage_milli, matched_windows)` or `None`.
-- Produces: `_relevance(item, question) -> tuple[int, int, int, int]` or `None`.
-
-- [ ] **Step 1: Add normalization constants and helpers**
-
-Import `re` and `unicodedata`. Define the approved prefix, suffix, title-suffix, generic-short-topic, and Unicode-hyphen constants as immutable tuples/sets. Sort variable-length affixes by length at definition time.
-
-`_compact` must retain only characters whose Unicode category begins with `L` or `N`.
-
-- [ ] **Step 2: Normalize one question frame**
-
-`_question_text` calls `_compact`, removes at most one longest approved prefix, then at most one longest approved suffix. It must not remove words from the middle of a question.
-
-- [ ] **Step 3: Derive one topic core**
-
-`_topic_core` removes at most one longest approved trailing title suffix. It never strips `项目` or recursively strips another suffix.
-
-- [ ] **Step 4: Parse exact business identifiers**
-
-Normalize dash variants to `-`, then find boundary-delimited ASCII alphanumeric tokens with optional internal dashes. Keep only tokens of length at least four that contain at least one ASCII letter and one digit. Compare identifier sets for exact equality.
-
-- [ ] **Step 5: Calculate body-intent coverage**
-
-Find one exact normalized topic anchor in the framed question, remove it, then remove at most one adjacent `的`. Reject intent shorter than four. Generate all four-character windows, count unique windows present in normalized body, and return coverage in thousandths only when at least one window and at least 50 percent match.
-
-- [ ] **Step 6: Score one candidate**
-
-Return the highest path among exact identifier, exact full topic, exact topic core, full-topic-plus-intent, and core-plus-intent. Exact 2–3 character topics are allowed only when the query equals the topic, the topic includes a Unicode letter, and it is not in the generic-short set. Fuzzy topic-core paths require a core of at least four characters.
-
-### Task 2: Filter, rank, and cap eligible memories
-
-**Files:**
-- Modify: `pkb/memories.py`
-
-**Interfaces:**
-- Consumes: `_relevance(item, question)` from Task 1.
-- Produces: `Memories.eligible(question) -> list[dict]`, ordered by relevance and capped at five.
-
-- [ ] **Step 1: Preserve qualification before scoring**
-
-For every `self.list()` item, first reject invalid status, privacy, conflict, and source privacy. Only then call `_relevance`.
-
-- [ ] **Step 2: Collect all matching candidates**
-
-Append `(score, item)` for every relevant qualified item. Do not stop when five candidates are encountered.
-
-- [ ] **Step 3: Apply deterministic stable sorting**
-
-Use stable sorts from least to most significant: `id` ascending, `updated` descending, relevance tuple descending. Slice to five only after sorting and return the existing public fields `id`, `topic`, `text`, and `sources`.
-
-- [ ] **Step 4: Review compatibility**
-
-Confirm exact distinctive topics such as `旅行`, `目标`, and `备份` still match themselves; generic short topics and pure numbers do not. Confirm no helper performs I/O or network access.
-
-### Task 3: Record and hand off the fixed candidate
-
-**Files:**
-- Modify: `docs/development-status.md`
-- Modify: `docs/development-testing-handoff.md`
-- Create: `docs/deliveries/BUG-V11-004-development-fix.md`
-
-**Interfaces:**
-- Produces: one fixed commit for independent testing.
-- Consumes: `docs/acceptance/BUG-V11-004.md` without editing it.
-
-- [ ] **Step 1: Document the root cause and full algorithm**
-
-Record that the previous whitespace split could not match continuous Chinese and that the fix combines normalized topic anchors, four-character body intent coverage, exact business identifiers, deterministic ranking, and post-sort cap.
-
-- [ ] **Step 2: Document unchanged privacy and network boundaries**
-
-State that qualification remains before scoring, offline mock behavior remains local, `cloud_requests` is untouched, and cloud payload/confirmation behavior did not change.
-
-- [ ] **Step 3: Run development checks**
-
-Run `git diff --check` and parse `pkb/memories.py` with Python `compile(...)`. Do not run functional tests in the development task.
-
-- [ ] **Step 4: Commit development-owned files**
-
-Stage only `pkb/memories.py`, development status/handoff, the delivery document, and this plan. Commit with `fix: match continuous Chinese memories`.
-
-- [ ] **Step 5: Request independent testing with the immutable fixture**
-
-Send the exact real topic, body, and question plus all approved positive, negative, identifier-boundary, ordering, cap, privacy, browser, no-network, and full-regression cases to the test task. Require it to call real `Memories.eligible()` rather than construct a context manually.
+- [x] 更新 `docs/development-status.md` 和 `docs/development-testing-handoff.md`。
+- [x] 新增 `docs/deliveries/BUG-V11-004-development-fix.md`，记录根因、实现边界和未验证项。
+- [x] 只执行 `compile(...)` 与 `git diff --check` 静态检查，不在开发任务执行功能测试。
+- [ ] 提交开发拥有的文件，通知测试任务以不可变提交运行 R2 全矩阵、159 项历史回归、BUG-V11-003 回归及浏览器全链路。
+- [ ] 测试完成后由测试任务将同一提交交审计复审；开发不代替测试或审计给出通过结论。

@@ -1,5 +1,150 @@
 import json
+import re
+import unicodedata
+from fractions import Fraction
 from .store import now, uid
+
+
+QUESTION_PREFIXES = tuple(sorted(
+    ('请告诉我', '请问'), key=len, reverse=True))
+QUESTION_SUFFIXES = tuple(sorted(
+    ('是什么', '吗'), key=len, reverse=True))
+TOPIC_SUFFIXES = tuple(sorted((
+    '会议纪要', '会议记录', '活动记录', '备忘录', '工作日志', '笔记',
+    '记录', '纪要', '总结', '方案', '计划', '资料', '清单'),
+    key=len, reverse=True))
+GENERIC_TOPICS = frozenset(
+    ('项目', '会议', '时间', '评审', '评审会') + TOPIC_SUFFIXES)
+BUSINESS_TOKEN = re.compile(
+    r'(?<![a-z0-9_-])[a-z0-9]+(?:[-_][a-z0-9]+)*(?![a-z0-9_-])')
+EVENT_QUALIFIERS = ('上一次', '下一次', '本次')
+
+
+def _compact(text):
+    normalized = unicodedata.normalize('NFKC', text).casefold()
+    return ''.join(char for char in normalized if unicodedata.category(char)[:1] in ('L', 'N'))
+
+
+def _question_text(question):
+    text = _compact(question)
+    for prefix in QUESTION_PREFIXES:
+        if text.startswith(prefix) and len(text) > len(prefix):
+            text = text[len(prefix):]
+            break
+    for suffix in QUESTION_SUFFIXES:
+        if text.endswith(suffix) and len(text) > len(suffix):
+            text = text[:-len(suffix)]
+            break
+    return text
+
+
+def _topic_core(topic):
+    text = _compact(topic)
+    for suffix in TOPIC_SUFFIXES:
+        if text.endswith(suffix):
+            return text[:-len(suffix)]
+    return text
+
+
+def _business_ids(text):
+    normalized = unicodedata.normalize('NFKC', text).casefold()
+    tokens = BUSINESS_TOKEN.findall(normalized)
+    return {token for token in tokens if
+            any('a' <= char <= 'z' for char in token) and
+            any(char.isdigit() for char in token)}
+
+
+def _short_topic_exact(raw_question, topic):
+    return (2 <= len(topic) <= 3 and raw_question == topic and
+            topic not in GENERIC_TOPICS and not topic.isdecimal() and
+            any(unicodedata.category(char).startswith('L') for char in topic))
+
+
+def _theme_anchor(value):
+    return (len(value) >= 4 and value not in GENERIC_TOPICS and
+            not value.isdecimal() and
+            any(unicodedata.category(char).startswith('L') for char in value))
+
+
+def _remove_anchor(question, anchor):
+    index = question.find(anchor)
+    if index < 0:
+        return None
+    before, after = question[:index], question[index + len(anchor):]
+    if after.startswith('的'):
+        after = after[1:]
+    return before + after
+
+
+def _intent_match(intent, body):
+    if not intent:
+        return Fraction(0, 1)
+    if len(intent) < 4:
+        return None
+    windows = list(dict.fromkeys(
+        intent[index:index + 4] for index in range(len(intent) - 3)))
+    matched = sum(window in body for window in windows)
+    if matched * 2 < len(windows) or windows[-1] not in body:
+        return None
+    if any(qualifier in intent and qualifier not in body
+           for qualifier in EVENT_QUALIFIERS):
+        return None
+    return Fraction(matched, len(windows))
+
+
+def _relevance(item, question):
+    raw_query = _compact(question)
+    query = _question_text(question)
+    topic = _compact(item['topic'])
+    body = _compact(item['text'])
+    core = _topic_core(item['topic'])
+    if not raw_query or not query or not topic:
+        return None
+
+    if _short_topic_exact(raw_query, topic):
+        return (3, Fraction(0, 1), len(topic))
+
+    query_ids = _business_ids(question)
+    candidate_ids = _business_ids(item['topic'] + '\n' + item['text'])
+    matched_ids = query_ids & candidate_ids
+    if query_ids and not matched_ids:
+        return None
+
+    theme_anchor = None
+    theme_tier = 0
+    if _theme_anchor(topic) and topic in query:
+        theme_anchor, theme_tier = topic, 3
+    elif _theme_anchor(core) and core in query:
+        theme_anchor, theme_tier = core, 1
+
+    identifier = max(matched_ids, key=lambda value: (len(value), value), default=None)
+    if theme_anchor is None and identifier is None:
+        return None
+
+    intent = query
+    if theme_anchor is not None:
+        intent = _remove_anchor(intent, theme_anchor)
+    if identifier is not None:
+        compact_identifier = _compact(identifier)
+        if compact_identifier in intent:
+            intent = _remove_anchor(intent, compact_identifier)
+    if intent is None:
+        return None
+
+    coverage = _intent_match(intent, body)
+    if coverage is None:
+        return None
+    if identifier is not None:
+        tier = 3
+    elif theme_tier == 3:
+        tier = 3
+    elif intent:
+        tier = 2
+    else:
+        tier = 1
+    anchor_length = max(
+        len(theme_anchor or ''), len(_compact(identifier or '')))
+    return (tier, coverage, anchor_length)
 
 
 class Memories:
@@ -77,18 +222,27 @@ class Memories:
             return {'id':identifier}
 
     def eligible(self, question):
-        result=[]
+        candidates=[]
         for item in self.list():
             if item['status']!='confirmed' or item['privacy']!='allowed' or item['conflicts']:
                 continue
-            if not (item['topic'] in question or any(t in item['text'] for t in question.split() if len(t)>1)):
+            try:
+                source_blocked = any(
+                    self.store.get(source)['privacy']!='allowed'
+                    for source in item['sources'])
+            except Exception:
+                # A missing or unreadable source fails closed for this memory.
+                source_blocked = True
+            if source_blocked:
                 continue
-            if any(self.store.get(s)['privacy']!='allowed' for s in item['sources']):
-                continue
-            result.append({k:item[k] for k in ('id','topic','text','sources')})
-            if len(result)>=5:
-                break
-        return result
+            score = _relevance(item, question)
+            if score:
+                candidates.append((score,item))
+        candidates.sort(key=lambda candidate:candidate[1]['id'])
+        candidates.sort(key=lambda candidate:candidate[1]['updated'],reverse=True)
+        candidates.sort(key=lambda candidate:candidate[0],reverse=True)
+        return [{k:item[k] for k in ('id','topic','text','sources')}
+                for _,item in candidates[:5]]
 
     @staticmethod
     def clean_answers(db,identifier):
