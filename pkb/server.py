@@ -13,9 +13,9 @@ from pathlib import Path
 from .config import MAX_REQUEST, data_directory
 from .store import Store
 from .extract import Extractor
-from .embedding import Embeddings
+from .embedding import Embeddings, SemanticUnavailable
 from .answers import Answers, CloudError
-from .memories import Memories
+from .migration import LegacyMemoryMigration
 
 STATIC = Path(__file__).parent / 'static'
 
@@ -88,18 +88,12 @@ class Handler(BaseHTTPRequestHandler):
                                       'cloud': self.server.answers.cloud_status()})
         if path == '/api/cleanup' and self.command == 'GET':
             return self.respond(200, {'items': store.pending_deletions()})
-        if path == '/api/memories' and self.command == 'GET':
-            return self.respond(200, {'items': self.server.memories.list()})
-        if path == '/api/memories' and self.command == 'POST':
-            return self.respond(201, self.server.memories.save(body))
-        if path == '/api/memories/update' and self.command == 'POST':
-            return self.respond(200, self.server.memories.save(body, body.get('id')))
-        if path == '/api/memories/delete' and self.command == 'POST':
-            self.server.memories.delete(body.get('id'))
-            return self.respond(200, {'deleted': body.get('id')})
+        if path == '/api/semantic/status' and self.command == 'GET':
+            return self.respond(200, self.server.embeddings.status())
+        if path == '/api/semantic/retry' and self.command == 'POST':
+            return self.respond(200, self.server.embeddings.retry())
         if path == '/api/answers/preview' and self.command == 'POST':
-            with store.lock:
-                return self.respond(200, self.server.answers.context(body.get('question')))
+            return self.respond(200, self.server.answers.context(body.get('question')))
         if path == '/api/answers/generate' and self.command == 'POST':
             return self.respond(200, self.server.answers.generate(body.get('question'), body.get('provider')))
         if path == '/api/cloud/prepare' and self.command == 'POST':
@@ -123,7 +117,9 @@ class Handler(BaseHTTPRequestHandler):
         if path == '/api/documents' and self.command == 'GET':
             query = urllib.parse.parse_qs(parsed.query)
             args = {k: query.get(k, [''])[0] for k in ('query', 'tag', 'since', 'until')}
-            return self.respond(200, {'items': self.server.embeddings.search(**args), 'semantic': self.server.embeddings.status()})
+            return self.respond(200, {'items': store.search(**args),
+                                      'semantic': self.server.embeddings.status(),
+                                      'mode': 'exact'})
         if path == '/api/documents' and self.command == 'POST':
             data = base64.b64decode(body.get('data', ''), validate=True)
             item = store.add(body.get('title', ''), body.get('filename', 'note.txt'), data,
@@ -147,6 +143,11 @@ class Handler(BaseHTTPRequestHandler):
                 return self.respond(200, store.delete(identifier))
             if len(parts) == 4 and parts[3] == 'privacy' and self.command == 'POST':
                 return self.respond(200, store.update_privacy(identifier, body.get('privacy')))
+            if len(parts) == 4 and parts[3] == 'update' and self.command == 'POST':
+                return self.respond(200, store.update_text(
+                    identifier, body.get('title'), body.get('text'), body.get('tags')))
+            if len(parts) == 4 and parts[3] == 'question-state' and self.command == 'POST':
+                return self.respond(200, store.set_question_state(identifier, body.get('state')))
         return self.respond(404, {'error': '未找到接口'})
 
     def handle_request(self):
@@ -155,6 +156,9 @@ class Handler(BaseHTTPRequestHandler):
             self.route()
         except KeyError:
             self.respond(404, {'error': '资料不存在'})
+        except SemanticUnavailable as exc:
+            self.respond(409, {'error': str(exc)[:300],
+                               'semantic': self.server.embeddings.status()})
         except (ValueError, TypeError, UnicodeError) as exc:
             self.respond(400, {'error': str(exc)[:300]})
         except CloudError as exc:
@@ -182,23 +186,27 @@ def main():
     except BlockingIOError:
         raise SystemExit('同一资料目录已有服务或备份操作运行')
     store = Store(root)
+    migration = LegacyMemoryMigration(store).run()
     server = ThreadingHTTPServer(('127.0.0.1', args.port), Handler)
     server.store = store
     server.embeddings = Embeddings(store, args.embedding_port, args.embedding_model)
     server.answers = Answers(store, server.embeddings)
-    server.memories = Memories(store)
-    server.answers.memories = server.memories
-    server.migration = server.answers.reconcile_legacy_sources()
+    server.legacy_history_migration = server.answers.reconcile_legacy_sources()
+    server.migration = migration
     server.extractor = Extractor(store)
     server.authority = '127.0.0.1:' + str(server.server_port)
     server.origin = 'http://' + server.authority
     server.bootstrap, server.session, server.csrf = (secrets.token_urlsafe(32) for _ in range(3))
     print('资料目录：' + str(store.root), flush=True)
-    if server.migration and (server.migration['answers_removed'] or
-                             server.migration['outbound_removed']):
+    if server.legacy_history_migration and (server.legacy_history_migration['answers_removed'] or
+                                            server.legacy_history_migration['outbound_removed']):
         print('旧历史迁移：清理问答 %d 条、外发记录 %d 条；原件、索引和个人记忆保留。' %
-              (server.migration['answers_removed'],
-               server.migration['outbound_removed']), flush=True)
+              (server.legacy_history_migration['answers_removed'],
+               server.legacy_history_migration['outbound_removed']), flush=True)
+    if migration and migration.get('source_count'):
+        print('单一资料库迁移：旧个人记忆 %d 条，资料映射 %d 条，受限 %d 条；旧表只读保留。' %
+              (migration['source_count'], migration['migrated_count'],
+               migration['blocked_count']), flush=True)
     print('请用浏览器打开（一次性链接）：' + server.origin + '/unlock?token=' + server.bootstrap, flush=True)
     try:
         server.serve_forever()

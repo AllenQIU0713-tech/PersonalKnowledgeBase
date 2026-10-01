@@ -25,6 +25,7 @@ class Extractor:
         with self.store.lock, self.store.connect() as db:
             if item['status'] != 'processing':
                 db.execute("UPDATE documents SET status='queued', error='' WHERE id=?", (identifier,))
+                self.store.invalidate_document(db, identifier)
         self.wake.set()
         return self.store.get(identifier)
 
@@ -56,4 +57,5 @@ class Extractor:
             except Exception as exc:
                 with self.store.lock, self.store.connect() as db:
                     db.execute("UPDATE documents SET status='failed',error=? WHERE id=?", (str(exc)[:500], identifier))
+                    self.store.invalidate_document(db, identifier)
             self.wake.set()

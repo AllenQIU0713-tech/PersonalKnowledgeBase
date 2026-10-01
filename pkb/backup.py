@@ -13,9 +13,9 @@ from contextlib import contextmanager
 from pathlib import Path
 from .config import data_directory, MIN_FREE
 from .store import Store, now
-from .embedding import Embeddings
 from .answers import Answers
 from .memories import Memories
+from .migration import LegacyMemoryMigration
 
 MAX_BACKUP = 2 * 1024**3
 HISTORY_SCHEMA = 2
@@ -37,11 +37,6 @@ def exclusive(root):
 
 def export_backup(root,destination):
     store=Store(root)
-    embeddings=Embeddings(store)
-    answers=Answers(store,embeddings)
-    memories=Memories(store)
-    answers.memories=memories
-    answers.reconcile_legacy_sources()
     destination=Path(destination).expanduser().resolve()
     destination.parent.mkdir(parents=True,exist_ok=True)
     if destination.exists():
@@ -81,8 +76,7 @@ def export_backup(root,destination):
 def restore_backup(root,source):
     # Restore merges records; it never rolls current content back or weakens privacy.
     store=Store(root)
-    embeddings=Embeddings(store)
-    answers=Answers(store,embeddings)
+    answers=Answers(store,None)
     memories=Memories(store)
     answers.reconcile_legacy_sources()
     with tempfile.TemporaryDirectory(dir=root) as temp:
@@ -169,20 +163,55 @@ def restore_backup(root,source):
                         if row['document_id'] in imported:
                             current.execute('INSERT INTO chunks VALUES (?,?,?,?,?)',tuple(row[c] for c in ('id','document_id','position','page','text')))
                     tables={r[0] for r in incoming.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+                    for identifier in imported:
+                        metadata = (incoming.execute(
+                            'SELECT * FROM document_metadata WHERE document_id=?', (identifier,)).fetchone()
+                            if 'document_metadata' in tables else None)
+                        if metadata:
+                            columns=('document_id','source_type','legacy_id','legacy_status','legacy_origin',
+                                     'original_created','original_updated','question_state','question_reason',
+                                     'content_version','qualification_version','updated')
+                            current.execute('INSERT OR REPLACE INTO document_metadata VALUES ('+
+                                            ','.join('?' for _ in columns)+')',
+                                            tuple(metadata[c] for c in columns))
+                        else:
+                            created=current.execute('SELECT created FROM documents WHERE id=?',
+                                                    (identifier,)).fetchone()[0]
+                            current.execute('INSERT OR IGNORE INTO document_metadata VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
+                                            (identifier,'collected',None,'','',created,created,
+                                             'ready','',1,1,created))
+                    if 'document_sources' in tables:
+                        for row in incoming.execute('SELECT * FROM document_sources'):
+                            if current.execute('SELECT 1 FROM documents WHERE id=?',
+                                               (row['document_id'],)).fetchone():
+                                current.execute('INSERT OR IGNORE INTO document_sources VALUES (?,?,?)',
+                                                (row['document_id'],row['source_document_id'],row['relation']))
+                    if 'legacy_memory_map' in tables:
+                        for row in incoming.execute('SELECT * FROM legacy_memory_map'):
+                            if current.execute('SELECT 1 FROM documents WHERE id=?',
+                                               (row['document_id'],)).fetchone():
+                                current.execute('INSERT OR IGNORE INTO legacy_memory_map VALUES (?,?,?,?,?,?)',
+                                                tuple(row[c] for c in ('memory_id','document_id','snapshot',
+                                                                      'migrated','question_state','reason')))
                     if {'memories','memory_sources','memory_history'}<=tables:
                         for row in incoming.execute('SELECT * FROM memories'):
                             identifier=row['id']
                             if current.execute('SELECT 1 FROM memory_tombstones WHERE id=?',(identifier,)).fetchone() or current.execute('SELECT 1 FROM memories WHERE id=?',(identifier,)).fetchone():
                                 continue
-                            sources=[r[0] for r in incoming.execute('SELECT document_id FROM memory_sources WHERE memory_id=?',(identifier,))]
-                            if any(s in deleted or not current.execute('SELECT 1 FROM documents WHERE id=?',(s,)).fetchone() for s in sources):
-                                continue
+                            sources={r[0] for r in incoming.execute('SELECT document_id FROM memory_sources WHERE memory_id=?',(identifier,))}
+                            if 'legacy_restore_sources' in tables:
+                                sources.update(r[0] for r in incoming.execute(
+                                    'SELECT source_document_id FROM legacy_restore_sources WHERE memory_id=?',
+                                    (identifier,)))
+                            sources=sorted(sources)
                             privacy=row['privacy']
-                            if any(current.execute('SELECT privacy FROM documents WHERE id=?',(s,)).fetchone()[0]=='local' for s in sources):
+                            if any((current.execute('SELECT privacy FROM documents WHERE id=?',(s,)).fetchone() or ['local'])[0]=='local' for s in sources):
                                 privacy='local'
                             current.execute('INSERT INTO memories VALUES (?,?,?,?,?,?,?,?)',(identifier,row['topic'],row['text'],row['status'],privacy,row['origin'],row['created'],row['updated']))
                             for s in sources:
-                                current.execute('INSERT INTO memory_sources VALUES (?,?)',(identifier,s))
+                                current.execute('INSERT OR IGNORE INTO legacy_restore_sources VALUES (?,?)',(identifier,s))
+                                if s not in deleted and current.execute('SELECT 1 FROM documents WHERE id=?',(s,)).fetchone():
+                                    current.execute('INSERT INTO memory_sources VALUES (?,?)',(identifier,s))
                             for h in incoming.execute('SELECT * FROM memory_history WHERE memory_id=?',(identifier,)):
                                 current.execute('INSERT INTO memory_history VALUES (?,?,?,?)',tuple(h[c] for c in ('id','memory_id','changed','snapshot')))
                     legacy_answers_skipped = 0
@@ -224,16 +253,23 @@ def restore_backup(root,source):
                 committed=True
                 for identifier in deleted:
                     store.finish_delete(identifier)
-                history = ('仅恢复安全版本备份中来源仍存在且允许外发的问答；'
-                           '向量由当前模型重建')
+                migration = LegacyMemoryMigration(store).run()
+                history = ('仅恢复来源仍完整且允许外发的安全历史；旧个人记忆按单一资料库规则迁移，'
+                           '语义向量由当前模型重建')
                 if not history_import_allowed:
-                    history = ('旧备份的问答历史与外发记录未导入；原件、索引和个人记忆已按规则恢复')
+                    history = ('旧备份的问答历史与外发记录未导入；原件和旧个人记忆已恢复，'
+                               '旧个人记忆按单一资料库规则迁移')
                 return {
                     'imported': len(imported),
                     'deleted_records_applied': len(deleted),
                     'legacy_answers_skipped': legacy_answers_skipped,
                     'legacy_outbound_skipped': legacy_outbound_skipped,
                     'history': history,
+                    'single_library_migration': {
+                        'source_count': migration['source_count'],
+                        'migrated_count': migration['migrated_count'],
+                        'blocked_count': migration['blocked_count'],
+                    },
                 }
             except Exception:
                 if not committed:
