@@ -2,7 +2,7 @@
 
 这是仅在本机 macOS 使用的个人资料库。所有内容从“收集”进入同一资料库；标题、原文关键词和完整编号使用独立精确查找，自然语言问题使用固定的本地 Qwen 语义索引。页面与服务只绑定 `127.0.0.1`，不会自动下载模型，也不会自动发送 DeepSeek 请求。
 
-当前代码是 S1 语义校准候选。独立测试完成真实模型校准并由开发固化阈值前，自然语言提问会显示“等待真实模型校准”，不能用关键词结果代替。
+当前正式应用仍是 `calibration_required`。S1 已证明单一余弦门槛不能区分高相似难负例；仓库现另含 S2 隔离证据复核试验工具。试验工具不接入页面、正式数据库、云端确认或 DeepSeek，不能把候选测量结果解释为功能已经启用。
 
 ## 启动与资料目录
 
@@ -97,6 +97,65 @@ python3 -m pkb.calibrate apply \
 ```
 
 这里的 `0.000000` 只是命令占位，不能作为默认值。测试须把报告哈希、候选阈值、独立验证集结果和失败样本交回开发；开发据证据固化配置并形成新的最终候选。如果不存在满足契约的阈值，保持自然语言检索不可用并反馈产品，不能加入问句特判或降低负例要求。
+
+## S2 隔离证据复核试验
+
+S2 只比较两个固定候选。0.6B 重排候选使用自带的 C++ 适配器读取最终 token 位置的原始 `yes` / `no` logits；不能改用 llama.cpp 通用 rerank 接口或生成的 yes/no 字符串。构建命令：
+
+```sh
+sh scripts/build-reranker-logits.sh
+```
+
+4B 指令候选由独立 llama-server 提供受限 JSON 输出。服务固定为单槽、8K 上下文、非思考模式、关闭提示缓存和普通日志，并为模型摘要设置固定别名：
+
+```sh
+/opt/homebrew/bin/llama-server \
+  -m "/absolute/path/Qwen3-4B-Instruct-2507-Q4_K_M.gguf" \
+  --alias 3605803b982cb64aead44f6c1b2ae36e3acdb41d8e46c8a94c6533bc4c67e597 \
+  -c 8192 -b 8192 -ub 1024 -np 1 -n 384 \
+  --reasoning off --chat-template-kwargs '{"enable_thinking":false}' \
+  --no-cache-prompt --no-slots --log-disable \
+  --host 127.0.0.1 --port 8767
+```
+
+测量数据必须放在独立测试目录，并显式列出每个问题经第一阶段召回得到的 1–40 个候选。该入口不会打开 `PKB_DATA_DIR`。固定格式为：
+
+```json
+{
+  "passages": [
+    {
+      "id": "p1",
+      "title": "合成资料标题",
+      "text": "不超过 1200 字的合成片段",
+      "content_version": 1,
+      "qualification_version": 1
+    }
+  ],
+  "queries": [
+    {"id": "q1", "text": "合成问题", "candidates": ["p1"]}
+  ]
+}
+```
+
+两个候选须顺序运行，不能同时常驻或在一次失败后切换候选补结果：
+
+```sh
+python3 -m pkb.review_measure \
+  --candidate reranker \
+  --dataset /private/tmp/pkb-s2/calibration.json \
+  --output /private/tmp/pkb-s2/reranker-report.json \
+  --model "/absolute/path/Qwen3-Reranker-0.6B-Q8_0.gguf" \
+  --reranker-executable "$PWD/build/qwen-reranker-logits"
+
+python3 -m pkb.review_measure \
+  --candidate instruct \
+  --dataset /private/tmp/pkb-s2/calibration.json \
+  --output /private/tmp/pkb-s2/instruct-report.json \
+  --model "/absolute/path/Qwen3-4B-Instruct-2507-Q4_K_M.gguf" \
+  --port 8767
+```
+
+重排报告保存原始 logits 和两类归一化分数，但 `accepted` 保持 `null`，因为开发没有选择阈值。4B 只有 `supported` 且至少一条引文能在本次实际片段正文中逐字定位时才结构性通过。两条路径都先应用完整业务编号全匹配门禁，并把问题、证据、内容版本、资格版本、模型、量化、模板、配置和管线绑定进结果。该工具不做阈值选择、质量结论或正式启用；这些工作由独立测试、审计和用户验收完成。
 
 ## 本地备份与恢复
 

@@ -1,6 +1,6 @@
 # 第三方组件与来源记录
 
-更新时间：2026-09-26。本文记录 V1.1 本机安装或调用的直接第三方组件。项目仓库不包含模型文件、llama.cpp 二进制或 API 密钥。
+更新时间：2026-10-02。本文记录本机安装或调用的直接第三方组件。项目仓库不包含模型文件、llama.cpp 二进制或 API 密钥。
 
 ## Qwen3-Embedding-0.6B Q8_0
 
@@ -18,9 +18,36 @@
 
 下载或重新下载时必须使用固定修订地址，并在启动前核对文件大小和 SHA256。若官方仓库、文件摘要或许可证发生变化，应作为新组件重新评估，不能沿用本记录。
 
+## Qwen3-Reranker-0.6B Q8_0（S2 试验）
+
+- 用途：隔离数据上的本地问题—片段证据复核候选；尚未接入正式应用。
+- 官方上游：`Qwen/Qwen3-Reranker-0.6B`，固定上游修订 `e61197ed45024b0ed8a2d74b80b4d909f1255473`。
+- 官方上游 `model.safetensors` SHA256：`27cd75a405b9c1b46b59abfd88aaa209e6fed2a1972cde9b70e7659537c5e65b`。
+- 实际量化发布者与仓库：`ggml-org/Qwen3-Reranker-0.6B-Q8_0-GGUF`，固定仓库修订 `a02f48bb4f057028298c21fa033da2b30d7742d5`；该修订包含文件上传提交 `ff8a9aa`，不得用可变 `main` 替代。
+- 固定下载地址：`https://huggingface.co/ggml-org/Qwen3-Reranker-0.6B-Q8_0-GGUF/resolve/a02f48bb4f057028298c21fa033da2b30d7742d5/qwen3-reranker-0.6b-q8_0.gguf`。
+- 实际文件：`Qwen3-Reranker-0.6B-Q8_0.gguf`，639,153,184 字节，Q8_0。
+- 实际文件 SHA256：`22c9979ce4fbcdc5acdc310c6641c32797eff1aa980b8f7a2db8a8ea23429a48`。
+- 来源链：量化仓库声明基础模型为 `Qwen/Qwen3-Reranker-0.6B`，格式为 llama.cpp GGUF、量化为 Q8_0。发布仓库没有提供足以独立复现的完整转换工具提交和命令，因此本轮把该缺口显式交审计，不能把文件摘要一致描述成转换链已复现。
+- 许可证：上游和量化仓库均标识 Apache License 2.0。
+
+应用不会下载或更新该文件。适配器启动前按固定 SHA256 校验，使用模型官方 causal prompt 与最后位置的 `yes` / `no` token logits；通用 rank pooling 结果不作为该模型输出。
+
+## Qwen3-4B-Instruct-2507 Q4_K_M（S2 试验）
+
+- 用途：隔离数据上的本地结构化证据充分性复核候选；尚未接入正式应用。
+- 官方上游：`Qwen/Qwen3-4B-Instruct-2507`；量化发布时记录的固定上游修订 `b79a0e62a051eebdd801742a4a70bbaac6b38747`。
+- 实际量化发布者与仓库：`unsloth/Qwen3-4B-Instruct-2507-GGUF`，固定仓库修订 `3e772c15a5192f387bcdfc1d24341034bed9c22f`。
+- 固定下载地址：`https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF/resolve/3e772c15a5192f387bcdfc1d24341034bed9c22f/Qwen3-4B-Instruct-2507-Q4_K_M.gguf`。
+- 实际文件：`Qwen3-4B-Instruct-2507-Q4_K_M.gguf`，2,497,281,120 字节，Q4_K_M。
+- 实际文件 SHA256：`3605803b982cb64aead44f6c1b2ae36e3acdb41d8e46c8a94c6533bc4c67e597`。
+- 来源链：量化仓库声明基础模型为官方 Qwen3-4B-Instruct-2507，并发布 llama.cpp GGUF Q4_K_M 文件。发布记录未给出足以独立复现的完整转换工具提交和命令；本轮保留此供应链限制供审计裁定，不声称已本地重建量化。
+- 许可证：官方上游和量化仓库均标识 Apache License 2.0。
+
+查询阶段只连接显式启动的 `127.0.0.1` llama-server，不自动下载、执行远程代码、使用代理、跟随重定向或调用外部工具。
+
 ## llama.cpp 运行时
 
-- 用途：在 `127.0.0.1` 提供本地向量 HTTP 服务。
+- 用途：在 `127.0.0.1` 提供本地向量/指令 HTTP 服务，并为 S2 重排适配器提供本地 C API 动态库。
 - 获取日期：2026-09-25；来源与许可复核日期：2026-09-26。
 - 上游：`ggml-org/llama.cpp`，`https://github.com/ggml-org/llama.cpp`。
 - 安装来源：Homebrew/core `llama.cpp` 0.5.0；上游标签 `v0.5.0`，提交 `7fe450e19305b828c199d602c23a8337aaa1f03b`。
