@@ -6,6 +6,7 @@ from pathlib import Path
 
 from .evidence_review import (
     INSTRUCT_MODEL_SHA256,
+    INSTRUCT_PIPELINE_VERSION,
     MAX_BODY_CHARS,
     MAX_CANDIDATES,
     MAX_QUESTION_CHARS,
@@ -117,7 +118,8 @@ def measure(args):
 
     report = {
         'format_version': 's2-review-measurement-v1',
-        'pipeline_version': PIPELINE_VERSION,
+        'pipeline_version': (INSTRUCT_PIPELINE_VERSION
+                             if args.candidate == 'instruct' else PIPELINE_VERSION),
         'candidate': args.candidate,
         'model_path_name': Path(args.model).name,
         'model_sha256': actual_model_sha256,
