@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "created_at": "2026-10-11T20:00:00+08:00",
+  "purpose": "read_only_source_inventory_for_q6_k_candidate",
+  "approval_status": "approval_blocked",
+  "authorization": {
+    "metadata_review": true,
+    "download_weights_or_dependencies": false,
+    "convert": false,
+    "launch_model": false,
+    "run_model_tests": false
+  },
+  "model": {
+    "repo": "Qwen/Qwen3-4B-Instruct-2507",
+    "revision": "b79a0e62a051eebdd801742a4a70bbaac6b38747",
+    "license": "Apache-2.0",
+    "resolve_prefix": "https://huggingface.co/Qwen/Qwen3-4B-Instruct-2507/resolve/b79a0e62a051eebdd801742a4a70bbaac6b38747/",
+    "allowlist_total_bytes": 8060918389,
+    "weight_total_bytes": 8044982000,
+    "files": [
+      {"path":"model-00001-of-00003.safetensors","bytes":3957900840,"sha256":"75311d91bb08cf0b882913da464a1e722a31fb44db35208663487efb7a3d8ed6","oid_kind":"git_lfs_sha256","git_oid":"764efb4175828b8bd28f879958c49b1ac23ad1f9","role":"weight"},
+      {"path":"model-00002-of-00003.safetensors","bytes":3987450520,"sha256":"0b48adbb1f60e901153d91907ba11ce63bd4b8b584482e730f48808d055dfba1","oid_kind":"git_lfs_sha256","git_oid":"3a3ba0f35dfed0f3500d80564496a11a1d19de18","role":"weight"},
+      {"path":"model-00003-of-00003.safetensors","bytes":99630640,"sha256":"7dd39ccca5e4de123c74c14af44c9bf2eb75df33b4614382af0134528e060d5d","oid_kind":"git_lfs_sha256","git_oid":"a1d2a67eb5cb179e09df3e9cd5d0690e57434fc3","role":"weight"},
+      {"path":"model.safetensors.index.json","bytes":32851,"sha256":"8109581029ce198e20c135cceebbd85109e4eb3874855124b93b15e65b50b69b","oid_kind":"computed_file_sha256","git_oid":"16c88d0419a7775febcd310f5639d13ef90d6153","role":"weight_index"},
+      {"path":"config.json","bytes":1543,"sha256":"32a57b48c676d78cbbb0ddfc90458e68f43893ff075c574490e8f34c07f7a40e","oid_kind":"computed_file_sha256","git_oid":"364aa784c9e4d36382fc06f072eb4b670637bc1a","role":"model_config"},
+      {"path":"generation_config.json","bytes":213,"sha256":"6ba70c3595d99ed50848ccba45248ad18ceb15a9202e3ba4c3a1be26645fe41f","oid_kind":"computed_file_sha256","git_oid":"6ca80493cd2c997297607921fa49e1d64dce135f","role":"generation_config"},
+      {"path":"tokenizer.json","bytes":11422821,"sha256":"67cc0080ffd7555f723f423c27cfef314e1ad9d335c8b79f465c5faba1ed478b","oid_kind":"git_lfs_sha256","git_oid":"f9abfc35bfcbad4dcabcff187ded4bcb554fb3d9","role":"tokenizer"},
+      {"path":"tokenizer_config.json","bytes":5404,"sha256":"355f2b4e5bad7b01f11ef6cb68ebc176f61b95c3276092ea225b1bea0e01e95c","oid_kind":"computed_file_sha256","git_oid":"1d4fba2de0e94e8f97e08927cfb7d084160c2880","role":"tokenizer_config"},
+      {"path":"vocab.json","bytes":2776833,"sha256":"ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910","oid_kind":"computed_file_sha256","git_oid":"4783fe10ac3adce15ac8f358ef5462739852c569","role":"tokenizer_vocab"},
+      {"path":"merges.txt","bytes":1671853,"sha256":"8831e4f1a044471340f7c0a83d7bd71306a5b867e95fd870f74d0c5308a904d5","oid_kind":"computed_file_sha256","git_oid":"31349551d90c7606f325fe0f11bbb8bd5fa0d7c7","role":"tokenizer_merges"},
+      {"path":"added_tokens.json","bytes":707,"sha256":"c0284b582e14987fbd3d5a2cb2bd139084371ed9acbae488829a1c900833c680","oid_kind":"computed_file_sha256","git_oid":"b54f9135e44c1e81047e8d05cb027af8bc039eed","role":"tokenizer_metadata"},
+      {"path":"special_tokens_map.json","bytes":613,"sha256":"76862e765266b85aa9459767e33cbaf13970f327a0e88d1c65846c2ddd3a1ecd","oid_kind":"computed_file_sha256","git_oid":"ac23c0aaa2434523c494330aeb79c58395378103","role":"tokenizer_metadata"},
+      {"path":"chat_template.jinja","bytes":4040,"sha256":"40c21f34cf67d8c760ef72f8ad3ae5afad514299d4b06e91dd9a8d705af7b541","oid_kind":"computed_file_sha256","git_oid":"a18870ad4ba26ac6c43758fc506c1bb6ff206bb4","role":"chat_template"},
+      {"path":"LICENSE","bytes":11343,"sha256":"832dd9e00a68dd83b3c3fb9f5588dad7dcf337a0db50f7d9483f310cd292e92e","oid_kind":"computed_file_sha256","git_oid":"6634c8cc3133b3848ec74b9f275acaaa1ea618ab","role":"license"},
+      {"path":"README.md","bytes":8168,"sha256":"8e3dd0c3b5b11897cc71092ccfe517bb7a9783479baa3665aad73c8d1a2041cd","oid_kind":"computed_file_sha256","git_oid":"b85879f8e465b5b02bd7ea13dd7ffaf22816bf59","role":"source_record"}
+    ],
+    "explicit_exclusions": [
+      "model-00001-of-00002.safetensors",
+      "model-00002-of-00002.safetensors",
+      "global_step6/",
+      "*.pt",
+      "*.pth",
+      "training scripts",
+      "repository code execution",
+      "trust_remote_code",
+      "snapshot_download",
+      "repository clone",
+      "path wildcards"
+    ]
+  },
+  "converter": {
+    "repo": "ggml-org/llama.cpp",
+    "revision": "7fe450e19305b828c199d602c23a8337aaa1f03b",
+    "license": "MIT",
+    "license_bytes": 1078,
+    "license_sha256": "94f29bbed6a22c35b992c5c6ebf0e7c92f13b836b90f36f461c9cf2f0f1d010d",
+    "local_gguf_package": "gguf-py==0.19.0",
+    "pypi_gguf_allowed": false,
+    "submodules_required": false
+  },
+  "dependency_lock": {
+    "status": "blocked_missing_complete_wheel_sbom",
+    "platform": "macOS arm64",
+    "python_line": "3.12",
+    "known_direct_constraints": [
+      "torch==2.11.0",
+      "numpy~=2.2.6",
+      "sentencepiece>=0.1.98,<0.3.0",
+      "transformers==4.57.6",
+      "protobuf>=4.21,<5",
+      "tqdm>=4.27",
+      "pyyaml>=5.1",
+      "requests>=2.25"
+    ],
+    "required_before_approval": [
+      "exact wheel URLs and indexes",
+      "filenames and platform tags",
+      "bytes and SHA-256",
+      "licenses for full transitive closure",
+      "Python build/hash",
+      "CMake version/hash",
+      "Apple Clang and Xcode SDK versions",
+      "configure cache and flags",
+      "built binary and dynamic library hashes"
+    ]
+  },
+  "approval_blockers": [
+    "complete macOS arm64 Python 3.12 transitive wheel SBOM is not locked",
+    "build toolchain and produced binary provenance are not locked",
+    "download budget is not yet split into exact model, source, and wheel upper bounds",
+    "isolated Q6 test configuration must bind the new model SHA without changing production Q4 settings",
+    "single Q6 outcome must not be represented as quantization-bit causal evidence"
+  ],
+  "audit_record": "docs/audit/S2-q6k-source-review.md"
+}
