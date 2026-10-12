@@ -173,7 +173,9 @@ class Answers:
                 text = chunk['text'][:min(1200, budget)]
                 budget -= len(text)
                 sources.append({'document_id': item['id'], 'chunk_id': chunk['id'],
-                                'title': document['title'], 'page': chunk['page'], 'text': text})
+                                'title': document['title'], 'page': chunk['page'], 'text': text,
+                                'source_type': item['source_type'],
+                                'source_label': item['source_label']})
                 sources[-1].update({
                     'content_version': document['content_version'],
                     'qualification_version': document['qualification_version'],

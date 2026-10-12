@@ -80,13 +80,12 @@
       "Python build/hash",
       "CMake version/hash",
       "Apple Clang and Xcode SDK versions",
-      "configure cache and flags",
-      "built binary and dynamic library hashes"
+      "configure cache and flags"
     ]
   },
   "approval_blockers": [
     "complete macOS arm64 Python 3.12 transitive wheel SBOM is not locked",
-    "build toolchain and produced binary provenance are not locked",
+    "build toolchain inputs are not locked; produced binary and dynamic library hashes must be recorded and audited after an approved build and before model conversion or launch",
     "download budget is not yet split into exact model, source, and wheel upper bounds",
     "isolated Q6 test configuration must bind the new model SHA without changing production Q4 settings",
     "single Q6 outcome must not be represented as quantization-bit causal evidence"

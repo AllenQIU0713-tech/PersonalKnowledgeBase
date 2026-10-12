@@ -202,6 +202,28 @@ class Store:
                 return False, '来源不可用于提问：' + reason
         return True, ''
 
+    def locally_browsable(self, db, identifier, seen=None):
+        """Allow parsed local browsing while excluding missing sources and deleted rows."""
+        seen = set(seen or ())
+        if identifier in seen:
+            return False, '资料来源关系形成循环'
+        branch = seen | {identifier}
+        row = db.execute('''SELECT d.status FROM documents d
+                            WHERE d.id=? AND NOT EXISTS (
+                                SELECT 1 FROM tombstones t WHERE t.id=d.id)''',
+                         (identifier,)).fetchone()
+        if not row:
+            return False, '资料不存在或已删除'
+        if row['status'] != 'ready':
+            return False, '资料正文尚未解析完成'
+        for source in db.execute(
+                'SELECT source_document_id FROM document_sources WHERE document_id=?',
+                (identifier,)):
+            allowed, reason = self.locally_browsable(db, source[0], branch)
+            if not allowed:
+                return False, '来源不可用于本地语义查找：' + reason
+        return True, ''
+
     def invalidate_document(self, db, identifier, qualification=True):
         self.clean_answers(db, identifier)
         if db.execute("SELECT 1 FROM sqlite_master WHERE name='semantic_vectors'").fetchone():

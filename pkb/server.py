@@ -92,6 +92,11 @@ class Handler(BaseHTTPRequestHandler):
             return self.respond(200, self.server.embeddings.status())
         if path == '/api/semantic/retry' and self.command == 'POST':
             return self.respond(200, self.server.embeddings.retry())
+        if path == '/api/documents/semantic-search' and self.command == 'GET':
+            query = urllib.parse.parse_qs(parsed.query).get('query', [''])[0]
+            items, status = self.server.embeddings.browse(query)
+            return self.respond(200, {'items': items, 'mode': 'semantic_browse',
+                                      'semantic': status})
         if path == '/api/answers/preview' and self.command == 'POST':
             return self.respond(200, self.server.answers.context(body.get('question')))
         if path == '/api/answers/generate' and self.command == 'POST':

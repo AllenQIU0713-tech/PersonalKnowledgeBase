@@ -161,8 +161,8 @@ Q6_K 是本轮唯一推荐精度。它相对当前 Q4_K_M 提供明显的位宽�
 
 - [x] **Step 1:** 用固定修订元数据补齐15项模型文件的大小和摘要，不访问 `main`。
 - [x] **Step 2:** 审计逐项核对模型发布者、修订、LFS 对象、许可证，并排除两片替代权重和训练工件。
-- [ ] **Step 3:** 锁定 macOS/arm64、Python 3.12 的完整传递 wheel URL、平台标签、大小、SHA-256、许可证，以及 Python/CMake/Apple Clang/Xcode SDK 构建信息。
-- [ ] **Step 4:** 审计核对完整依赖 SBOM、工具源码/二进制来源与拆分后的下载上限；在此之前保持 `approval_blocked`。
+- [ ] **Step 3:** 锁定 macOS/arm64、Python 3.12 的完整传递 wheel URL、平台标签、大小、SHA-256、许可证，以及 Python/CMake/Apple Clang/Xcode SDK 的下载来源、版本和构建参数。构建产物的二进制/动态库摘要无法在构建前产生，不列为下载审批前置项。
+- [ ] **Step 4:** 审计核对完整依赖 SBOM、工具源码来源与拆分后的下载上限；在此之前保持 `approval_blocked`。获批构建后，另在模型转换/启动前计算并审计二进制与动态库摘要。
 - [ ] **Step 5:** 总负责取得用户对 manifest 中全部下载、45 GiB 工作区和模型运行阶段的明确批准。
 - [ ] **Step 6:** 将 manifest 与审计结论单独提交；此提交不包含下载文件或模型输出。
 
@@ -179,11 +179,11 @@ Q6_K 是本轮唯一推荐精度。它相对当前 Q4_K_M 提供明显的位宽�
 - Produces: 两次重放摘要一致的 Q6_K GGUF、第一份 BF16 中间件、构建日志和可机器校验的来源 manifest。
 
 - [ ] **Step 1:** 在新隔离目录按白名单逐文件下载并立即核对大小和 SHA-256；任一不符即删除失败下载并停止。
-- [ ] **Step 2:** 固定源码、编译器、CMake argv、Python lock、wheel 摘要和二进制摘要。
+- [ ] **Step 2:** 固定源码、编译器、CMake argv、Python lock 和 wheel 摘要；记录实际工具链版本。获批构建后计算 llama-quantize、运行时二进制及动态库摘要，写入 build manifest 并经审计复核，未完成前不得转换或启动模型。
 - [ ] **Step 3:** 执行 `run-a` 的 BF16 转换与 Q6_K 量化，记录各阶段耗时、峰值 RSS、swap 增量、文件大小和 SHA-256。
 - [ ] **Step 4:** 在干净 `run-b` 目录完整重放并比较 BF16、Q6_K、GGUF 元数据和逐张量清单。
 - [ ] **Step 5:** 新增仅测试使用、由 manifest 精确绑定 Q6 SHA/量化版本的隔离配置；任意 CLI 摘要绕过必须失败，正式 Q4 固定值和 `calibration_required` 保持不变。
-- [ ] **Step 6:** 静态核验通过后冻结候选；不启动模型，不宣称质量或资源通过。
+- [ ] **Step 6:** 静态核验及构建产物摘要审计通过后冻结候选；不启动模型，不宣称质量或资源通过。
 - [ ] **Step 7:** 仅提交脚本、manifest、摘要、日志和通知文本；GGUF 保存在批准的本地模型目录，不提交 Git。
 
 ### Task 3: 独立分阶段验证

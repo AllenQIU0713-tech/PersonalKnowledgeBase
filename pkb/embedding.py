@@ -137,6 +137,18 @@ class Embeddings:
                 rows.append(row)
         return rows
 
+    def _browseable_chunks(self, db):
+        rows = []
+        for row in db.execute('''SELECT c.*,d.title,d.tags,d.event_time,d.sha256,
+                                  m.source_type,m.content_version,m.qualification_version
+                                  FROM chunks c JOIN documents d ON d.id=c.document_id
+                                  JOIN document_metadata m ON m.document_id=d.id
+                                  ORDER BY c.id'''):
+            allowed, _ = self.store.locally_browsable(db, row['document_id'])
+            if allowed:
+                rows.append(row)
+        return rows
+
     def _source_hash(self, row):
         payload = json.dumps({
             'title': row['title'], 'tags': json.loads(row['tags']),
@@ -150,15 +162,15 @@ class Embeddings:
     def _next_pending(self):
         with self.store.connect() as db:
             config = db.execute('SELECT * FROM semantic_index_config WHERE id=1').fetchone()
-            eligible = self._eligible_chunks(db)
-            valid_ids = {row['id'] for row in eligible}
+            browseable = self._browseable_chunks(db)
+            valid_ids = {row['id'] for row in browseable}
             if valid_ids:
                 marks = ','.join('?' for _ in valid_ids)
                 db.execute('DELETE FROM semantic_vectors WHERE chunk_id NOT IN (' + marks + ')',
                            tuple(valid_ids))
             else:
                 db.execute('DELETE FROM semantic_vectors')
-            for row in eligible:
+            for row in browseable:
                 source_hash = self._source_hash(row)
                 vector = db.execute('SELECT * FROM semantic_vectors WHERE chunk_id=?',
                                     (row['id'],)).fetchone()
@@ -186,7 +198,7 @@ class Embeddings:
                         FROM chunks c JOIN documents d ON d.id=c.document_id
                         JOIN document_metadata m ON m.document_id=d.id WHERE c.id=?''',
                                          (row['id'],)).fetchone()
-                    allowed, _ = self.store.question_eligible(db, row['document_id'])
+                    allowed, _ = self.store.locally_browsable(db, row['document_id'])
                     live_config = db.execute(
                         'SELECT * FROM semantic_index_config WHERE id=1').fetchone()
                     if (not current or not allowed or
@@ -263,6 +275,16 @@ class Embeddings:
                     excluded_reasons['restricted'] += 1
                 elif not row['chunk_count']:
                     excluded_reasons['no_text'] += 1
+            browseable_rows = self._browseable_chunks(db)
+            browseable_indexed = 0
+            for row in browseable_rows:
+                source_hash = self._source_hash(row)
+                if db.execute('''SELECT 1 FROM semantic_vectors WHERE chunk_id=?
+                    AND signature=? AND generation=? AND source_hash=?
+                    AND content_version=? AND qualification_version=?''',
+                              (row['id'], self.signature, config['generation'], source_hash,
+                               row['content_version'], row['qualification_version'])).fetchone():
+                    browseable_indexed += 1
         if not self.port:
             state, reason = 'service_unavailable', '本地语义服务未配置'
         elif self.error_state:
@@ -275,6 +297,23 @@ class Embeddings:
             state, reason = 'calibration_required', '当前模型尚未完成余弦门槛校准'
         else:
             state, reason = 'ready', '本地语义检索已就绪'
+        if not self.port:
+            browse_state = 'service_unavailable'
+        elif self.error_state:
+            browse_state = self.error_state
+        elif not browseable_rows:
+            browse_state = 'no_evidence'
+        elif browseable_indexed < len(browseable_rows):
+            browse_state = 'indexing'
+        else:
+            browse_state = 'ready'
+        browse_reason = {
+            'service_unavailable': '本地 embedding 服务未就绪，语义查找已暂停',
+            'no_evidence': '当前没有已解析且来源有效的本地资料',
+            'indexing': '正在建立完整的本地语义查找索引',
+            'index_error': self.error or '本地语义索引发生错误',
+            'ready': '本地语义查找已就绪',
+        }.get(browse_state, self.error or '本地语义查找暂不可用')
         return {
             'state': state, 'reason': reason, 'enabled': bool(self.port),
             'model': self.model, 'eligible': eligible, 'indexed': indexed,
@@ -286,6 +325,10 @@ class Embeddings:
             'threshold': config['threshold'],
             'passage_template': PASSAGE_TEMPLATE_VERSION,
             'query_template': QUERY_TEMPLATE_VERSION, 'pooling': POOLING,
+            'browse': {'state': browse_state, 'reason': browse_reason,
+                       'available': browse_state == 'ready',
+                       'indexed': browseable_indexed, 'eligible': len(browseable_rows),
+                       'pending': max(0, len(browseable_rows) - browseable_indexed)},
         }
 
     def search(self, query, tag='', since='', until=''):
@@ -293,6 +336,80 @@ class Embeddings:
 
     def search_with_mode(self, query, tag='', since='', until=''):
         return self.retrieve(query, tag, since, until)
+
+    @staticmethod
+    def _source_label(source_type):
+        return '迁移自个人记忆' if source_type == 'legacy_memory' else '收集资料'
+
+    def browse(self, query, limit=20):
+        if not isinstance(query, str) or not query.strip() or len(query) > 2000:
+            raise ValueError('语义查找内容须为 1–2000 字')
+        if not isinstance(limit, int) or not 1 <= limit <= 50:
+            raise ValueError('语义查找结果数无效')
+        index_status = self.status()
+        browse_status = index_status['browse']
+        if browse_status['state'] == 'no_evidence':
+            return [], browse_status
+        if browse_status['state'] != 'ready':
+            raise SemanticUnavailable(browse_status['reason'])
+        try:
+            query_vector = self.encode(query.strip(), query=True)
+        except Exception as exc:
+            self.error = '本地语义服务不可用：' + str(exc)[:180]
+            self.error_state = 'service_unavailable'
+            raise SemanticUnavailable('本地语义查找已暂停：' + self.error) from None
+        with self.store.connect() as db:
+            config = dict(db.execute('SELECT * FROM semantic_index_config WHERE id=1').fetchone())
+            if (config['signature'] != index_status['signature'] or
+                    config['generation'] != index_status['generation'] or
+                    config['revision'] != index_status['revision']):
+                raise SemanticUnavailable('本地语义查找索引已变化，请重新查找')
+            if len(query_vector) != config['dimension']:
+                raise SemanticUnavailable('查询向量维度与本地语义索引不一致')
+            rows = db.execute('''SELECT c.*,d.title,d.tags,d.event_time,d.created,d.privacy,
+                d.status,m.source_type,m.question_state,m.question_reason,
+                m.content_version,m.qualification_version,v.vector,v.source_hash
+                FROM semantic_vectors v
+                JOIN chunks c ON c.id=v.chunk_id JOIN documents d ON d.id=c.document_id
+                JOIN document_metadata m ON m.document_id=d.id
+                WHERE v.signature=? AND v.generation=? ORDER BY c.id''',
+                              (self.signature, config['generation'])).fetchall()
+            scored = []
+            for row in rows:
+                allowed, _ = self.store.locally_browsable(db, row['document_id'])
+                if not allowed or self._source_hash(row) != row['source_hash']:
+                    continue
+                vector = json.loads(row['vector'])
+                if (len(vector) != len(query_vector) or
+                        any(not isinstance(value, (int, float)) or not math.isfinite(value)
+                            for value in vector)):
+                    raise SemanticUnavailable('本地语义索引包含无效或维度不一致的向量')
+                scored.append((sum(a * b for a, b in zip(query_vector, vector)), row))
+        scored.sort(key=lambda item: (-item[0], item[1]['id']))
+        results, per_document = [], {}
+        for similarity, row in scored:
+            if len(results) >= limit:
+                break
+            count = per_document.get(row['document_id'], 0)
+            if count >= MAX_PER_DOCUMENT:
+                continue
+            per_document[row['document_id']] = count + 1
+            results.append({
+                'rank': len(results) + 1,
+                'document_id': row['document_id'], 'chunk_id': row['id'],
+                'title': row['title'], 'source_type': row['source_type'],
+                'source_label': self._source_label(row['source_type']),
+                'privacy': row['privacy'], 'status': row['status'],
+                'question_state': row['question_state'],
+                'question_reason': row['question_reason'],
+                'excerpt': row['text'][:400],
+                'page': row['page'], 'semantic_similarity': similarity,
+                'content_version': row['content_version'],
+                'qualification_version': row['qualification_version'],
+            })
+        return results, {'state': 'ready', 'reason': '按本地余弦相似度排序',
+                         'indexed': browse_status['indexed'],
+                         'eligible': browse_status['eligible']}
 
     def _exact_features(self, query, row):
         normalized_query = _normalized(query)
@@ -334,7 +451,7 @@ class Embeddings:
                     config['threshold'] != status['threshold']):
                 raise SemanticUnavailable('语义索引配置已变化，请重新提问')
             rows = db.execute('''SELECT c.*,d.title,d.tags,d.event_time,d.created,d.privacy,
-                d.status,m.question_state,m.content_version,m.qualification_version,
+                d.status,m.source_type,m.question_state,m.content_version,m.qualification_version,
                 v.vector,v.source_hash FROM semantic_vectors v
                 JOIN chunks c ON c.id=v.chunk_id JOIN documents d ON d.id=c.document_id
                 JOIN document_metadata m ON m.document_id=d.id
@@ -390,6 +507,8 @@ class Embeddings:
             per_document[row['document_id']] = count + 1
             results.append({
                 'id': row['document_id'], 'title': row['title'],
+                'source_type': row['source_type'],
+                'source_label': self._source_label(row['source_type']),
                 'privacy': row['privacy'], 'status': row['status'],
                 'question_state': row['question_state'], 'tags': json.loads(row['tags']),
                 'event_time': row['event_time'], 'created': row['created'],
