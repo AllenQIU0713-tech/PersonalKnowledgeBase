@@ -1,19 +1,19 @@
 # S2R3 evidence-gate candidate handoff
 
-Status: isolated candidate revision in progress. This does not enable formal QA, certify any reviewer model, or change `calibration_required`.
+Status: fixed developer candidate; independent testing and audit pending. This does not enable formal QA, certify any reviewer model, or change `calibration_required`.
 
 ## Candidate boundary
 
 - Parent behavior baseline: S2R2 commit `4e8e8cac10452b5e0b565902bd191acba90dd26f`; that commit remains unchanged.
 - Previous static-review candidate: `9a5596e40c8904b42bd6f019de8e88a73f83decc`; preserve its audit evidence as-is.
-- New candidate commit: fill after this revision is committed.
+- New code candidate commit: `391baf9db5afcffd8e2de4ba65782a05b6426a98` (`fix: close S2R3 evidence review audit gaps`). This commit contains the implementation; this handoff is finalized in a docs-only follow-up.
 - Production `server.py` constructs `Answers` without an evidence pipeline. `/api/semantic/status` reports QA blocked when the vector index is ready but the reviewer is missing or unqualified; the UI disables QA controls from `qa.available`. Local semantic browsing reports its own index/service state and remains independent.
 - `Answers.prepare`, `Answers.generate`, confirmation rebuild, and confirmation snapshot validation re-check formal QA readiness in the backend. A test double or a direct API call cannot create a cloud confirmation or simulated answer while the reviewer/collection gate is unqualified; the UI disablement is not the security boundary.
 - Embedding/index failures stay explicit unavailable states; they do not become no-match results and never fall back to keyword retrieval.
 
 ## Reviewer identity and injection
 
-`EvidencePipeline(reviewer)` reads a read-only `configuration` manifest and `config_signature` from the reviewer object. The manifest binds candidate identity, 64-character model/config digest, quantization, template version, settings, reviewer pipeline version, runtime version, and result-protocol version. The pipeline recomputes and checks the signature at construction, before reviews, after reviews and before returning a preview. Each result must carry matching question/evidence/source-version hashes and config/pipeline/runtime/protocol identifiers.
+`EvidencePipeline(reviewer)` reads a read-only `configuration` manifest and `config_signature` from the reviewer object. The manifest binds candidate identity, 64-character model/config digest, quantization, template version, settings, reviewer pipeline version, runtime version, and result-protocol version. `configuration_signature()` includes runtime and result-protocol versions; per-passage result envelopes bind the same fields. The pipeline recomputes and checks the signature at construction, before and after reviews, and before returning a preview. Each result must carry matching question/evidence/source-version hashes and config/pipeline/runtime/protocol identifiers. Configuration drift blocks the request and invalidates old preview/confirmation snapshots.
 
 The independent test task may inject a deterministic `test-double` with its own explicit configuration digest and signature. That signature only proves wiring identity; it is not a real model source, model-quality, calibration, or formal QA claim. The double must implement both `review(input)` and `review_set(question, evidence, comparison_plan, timeout_seconds=...)` using the frozen S2R3 result protocol. Production startup never constructs the test double.
 
@@ -44,8 +44,8 @@ Use a new immutable run bundle under the product freeze contract. Preserve the p
 - conflict pages show both exact sides read-only, single-side prepare is rejected, and source/index/reviewer changes invalidate confirmation;
 - rejected passage bodies and IDs do not appear in QA preview JSON; cloud payload, history and outbound records contain only selected consistent reviewed evidence.
 
-These are handoff expectations, not developer-run tests. Include direct backend/API attempts against prepare, mock generate, rebuild, and confirm with a `test-double` reviewer that is not formally qualified; each must remain blocked even when its candidate-only evidence-set result is `consistent`. The test task owns all executable oracle, registry, fixture, run bundle and execution. Development has not run tests.
+These are handoff expectations, not developer-run tests. Include direct backend/API attempts against prepare, mock generate, confirmation rebuild, and confirm with a `test-double` reviewer that is not formally qualified; each must remain blocked even when its candidate-only evidence-set result is `consistent`. Also preview under the isolated test assembly, mutate reviewer runtime/protocol/config after preview and after any candidate confirmation fixture, then verify old results/tickets fail closed. Assert there is no real cloud request, no outbound success record, and no newly stored successful answer from blocked calls. The test task owns all executable oracle, registry, fixture, run bundle and execution. Development has not run tests.
 
 ## Non-claims
 
-This candidate does not prove reviewer model quality, answerability accuracy, conflict-review accuracy, latency/resource acceptance, formal local QA availability, complete UI acceptance, real browser behavior, real DeepSeek behavior, security-audit completion, release readiness, or Q6_K provenance. No formal-library data or real DeepSeek request was used. No model, package, or build tool was downloaded, installed, built, converted, or launched.
+This candidate does not prove reviewer model quality, answerability accuracy, conflict-review accuracy, latency/resource acceptance, formal local QA availability, complete UI acceptance, real browser behavior, real DeepSeek behavior, security-audit completion, release readiness, or Q6_K provenance. Development performed static diff review only and ran no tests. No formal-library data or real DeepSeek request was used. No model, package, or build tool was downloaded, installed, built, converted, or launched.

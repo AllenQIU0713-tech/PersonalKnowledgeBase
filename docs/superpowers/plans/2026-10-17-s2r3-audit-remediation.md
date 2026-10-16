@@ -59,7 +59,7 @@
 ## Task 4: Handoff and Fixed Candidate
 
 - [x] Run only static diff review; do not execute tests.
-- [ ] Record new fixed candidate commit and changed files in the handoff.
+- [x] Record new fixed candidate commit and changed files in the handoff.
 - [ ] Send the candidate and immutable scope to independent test and audit tasks; state all non-claims explicitly.
 
 ## Scope Exclusions
