@@ -425,9 +425,20 @@ class Embeddings:
             int(bool(date and date in query)),
         )
 
-    def retrieve(self, query, tag='', since='', until=''):
+    def retrieve(self, query, tag='', since='', until='', *,
+                 candidate_limit=MAX_RESULTS, per_document_limit=MAX_PER_DOCUMENT,
+                 use_threshold=True):
         if not isinstance(query, str) or not query.strip() or len(query) > 2000:
             raise ValueError('问题须为 1–2000 字')
+        if (not isinstance(candidate_limit, int) or isinstance(candidate_limit, bool)
+                or not 1 <= candidate_limit <= MAX_SEMANTIC_CANDIDATES):
+            raise ValueError('语义候选数必须在 1–40 之间')
+        if (per_document_limit is not None and
+                (not isinstance(per_document_limit, int) or isinstance(per_document_limit, bool)
+                 or per_document_limit < 1)):
+            raise ValueError('每份资料候选数必须为正整数或不限制')
+        if not isinstance(use_threshold, bool):
+            raise ValueError('余弦阈值策略无效')
         status = self.status()
         if status['state'] == 'no_evidence':
             return [], {'mode': 'semantic', 'state': 'no_evidence',
@@ -472,7 +483,7 @@ class Embeddings:
                             for value in vector)):
                     raise SemanticUnavailable('语义索引包含无效或维度不一致的向量')
                 similarity = sum(a * b for a, b in zip(query_vector, vector))
-                if similarity >= config['threshold']:
+                if not use_threshold or similarity >= config['threshold']:
                     scored.append((similarity, row))
         scored.sort(key=lambda item: (-item[0], item[1]['id']))
         scored = scored[:MAX_SEMANTIC_CANDIDATES]
@@ -499,10 +510,10 @@ class Embeddings:
         ranked.sort(key=lambda item: (-item[0], -item[1], item[2]['id']))
         results, per_document = [], {}
         for score, similarity, row in ranked:
-            if len(results) >= MAX_RESULTS:
+            if len(results) >= candidate_limit:
                 break
             count = per_document.get(row['document_id'], 0)
-            if count >= MAX_PER_DOCUMENT:
+            if per_document_limit is not None and count >= per_document_limit:
                 continue
             per_document[row['document_id']] = count + 1
             results.append({
@@ -517,7 +528,15 @@ class Embeddings:
                 'semantic_similarity': similarity, 'fused_score': score,
                 'content_version': row['content_version'],
                 'qualification_version': row['qualification_version'],
+                'source_hash': row['source_hash'],
             })
+        reason = ('本次使用本地语义召回与精确增强排序，余弦阈值不作为证据门禁。'
+                  if not use_threshold else '本次使用已校准的本地语义检索与精确增强。')
         return results, {'mode': 'semantic', 'state': 'ready',
-                         'reason': '本次使用已校准的本地语义检索与精确增强。',
+                         'reason': reason,
                          'index': status}
+
+    def retrieve_answer_candidates(self, query):
+        """Return up to 40 eligible passages for question-specific evidence review."""
+        return self.retrieve(query, candidate_limit=MAX_SEMANTIC_CANDIDATES,
+                             per_document_limit=None, use_threshold=False)
