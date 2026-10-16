@@ -16,9 +16,18 @@ S2R2 预运行审计反复发现计划题数、labels、manifest 与冻结状态
 
 ## 2. 不可变运行包
 
-每次候选运行使用新目录，例如 `S2R2-qa-run-v4/`，包含 registry、dataset、生成的 labels/计划摘要、固定测试 profile、候选完整 Git commit、产品规格文件 SHA-256、测试脚本与生成器摘要、模型/运行时标识、执行边界和 manifest。`bundle_id` 为这些实际字节的规范化摘要，不包含会自引用的字段；manifest 记录每个文件 SHA-256 和相对路径。候选来自该 commit 的隔离归档，运行时不得从共享工作树临时读取可变脚本或标签。
+每次候选运行使用新目录，例如 `S2R2-qa-run-v4/`，包含 registry、dataset、生成的 labels/计划摘要、固定测试 profile、候选完整 Git commit、产品规格文件 SHA-256、测试脚本与生成器摘要、模型/运行时标识、执行边界和 manifest。候选来自该 commit 的隔离归档，运行时不得从共享工作树临时读取可变脚本或标签。
 
-测试任务一次性提交 `prepared` 包；审计核对后单独生成冻结记录，列 bundle_id、审核结论、审计任务/提交、带时区时间和覆盖的候选/规格/测试 profile。冻结记录作为内部审计见证，不宣称外部不可抵赖的密码学时间戳。通过后状态为 `frozen`，测试只读运行。`frozen` 包中任何一个受保护字节变化，静态检查自动判旧冻结无效；修订必须复制为新版本目录、重新计算 bundle_id 并重新审计。旧包和审计意见继续保留，不能通过改回旧哈希掩盖变更。
+`bundle_id` 的规范固定如下，测试与审计各自独立复算：
+
+1. 受保护文件清单包含 registry、dataset、labels、计划、profile、执行脚本/生成器、产品规格快照或其固定 Git blob、候选隔离归档，以及实际用到的配置。各文件先以**原始字节**计算 SHA-256；UTF-8 换行、空格或文件编码变化都会改变摘要。清单路径为相对 bundle 根的 POSIX 路径，只允许 ASCII 字母、数字、`._-/`，禁止绝对路径、`..`、重复路径和符号链接；按路径 ASCII 字典序排序。模型大文件可由已审计的外部模型 manifest 精确摘要引用，不复制入小型测试包，但其实际文件摘要仍在候选运行前校验。
+2. `manifest.json` 的计算内容是一个 JSON 对象，至少含 `schema="pkb-test-bundle-v1"`、候选完整 commit、受保护文件清单与摘要、规格/模型/运行时绑定和测试约束。数值字段只允许整数，禁止浮点、NaN 和 Infinity；阈值等浮点配置作为受保护 profile 文件的原始字节保存并以其 SHA 引用。对象递归按键名字典序排序，数组保留语义顺序（`files` 数组须先按路径排序），使用 Python `json.dumps(obj, ensure_ascii=False, sort_keys=True, separators=(',', ':'), allow_nan=False).encode('utf-8')` 的字节作为规范化内容，不追加换行。
+3. `bundle_id = SHA256(上述规范化内容)`。计算时从 manifest 对象**仅删除顶层 `bundle_id`**；审计见证、运行结果和可变 `status` 根本不属于 manifest schema，不参与计算，也不得在冻结后写回 manifest。生成器把算出的 `bundle_id` 加入最终 manifest 文件。preflight 先按实际文件字节重算每项摘要，再按本规则重算 bundle_id；任一不符即失败。
+4. 审计在独立 `freeze-witness.json` 记录 bundle_id、最终 `manifest.json` 的原始文件 SHA-256、审计者任务/提交、审核时间和结论。`frozen` 状态只由**有效见证**表示，不能通过修改 manifest 字段自称冻结。preflight 同时核验见证绑定和 manifest 原始摘要；见证之外的运行输出另存，不改变包内受保护文件。
+
+独立复算示例：以 `schema="pkb-test-bundle-v1"`、候选 commit `0123456789abcdef0123456789abcdef01234567`、两个已排序文件 `dataset.json`/`labels.json` 的 SHA 分别为64个 `0`/64个 `1`，上述规范化 JSON 的 SHA-256 必须为 `9035473abc411c6823a270a59876fbbdf80bf3efe4a811fc96d13f22b71c1b96`。这个向量只验证 canonicalization；实际文件摘要仍须按原始字节核对。测试工具交付时附第二份独立复算结果，审计不能只调用同一生成器的“verify”函数给自己背书。
+
+测试任务一次性提交 prepared 包；审计核对后单独生成上述冻结见证，列 bundle_id、审核结论、审计任务/提交、带时区时间和覆盖的候选/规格/测试 profile。冻结记录作为内部审计见证，不宣称外部不可抵赖的密码学时间戳。通过后状态为 frozen，测试只读运行。frozen 包中任何一个受保护字节变化，静态检查自动判旧冻结无效；修订必须复制为新版本目录、重新计算 bundle_id 并重新审计。旧包和审计意见继续保留，不能通过改回旧哈希掩盖变更。
 
 ## 3. 候选启动前 preflight
 
