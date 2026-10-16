@@ -5,7 +5,7 @@ Status: developer candidate prepared for independent review. This does not enabl
 ## Candidate boundary
 
 - Parent behavior baseline: S2R2 commit `4e8e8cac10452b5e0b565902bd191acba90dd26f`; that commit is unchanged.
-- Candidate commit: fill after the developer commit is created.
+- Candidate commit: `9a5596e40c8904b42bd6f019de8e88a73f83decc`.
 - New pipeline version: `s2r3-evidence-gate-v1`.
 - Production `server.py` constructs `Answers` without an evidence pipeline. Answer preview therefore reports `blocked_by_missing_reviewer`; cloud preparation and mock answer generation cannot bypass that state.
 - Local semantic browsing remains on the separate `/api/documents/semantic-search` path.
