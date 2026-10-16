@@ -20,6 +20,12 @@ from .migration import LegacyMemoryMigration
 STATIC = Path(__file__).parent / 'static'
 
 
+def semantic_status(server):
+    status = server.embeddings.status()
+    status['qa'] = server.answers.qa_status(status)
+    return status
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *args):
         pass  # Request URLs and user data must not enter ordinary logs.
@@ -84,12 +90,12 @@ class Handler(BaseHTTPRequestHandler):
             return self.respond(200, file.read_bytes(), (mimetypes.guess_type(str(file))[0] or 'text/plain') + '; charset=utf-8')
         if path == '/api/session' and self.command == 'GET':
             return self.respond(200, {'csrf': self.server.csrf, 'data_dir': str(store.root),
-                                      'semantic': self.server.embeddings.status(),
+                                      'semantic': semantic_status(self.server),
                                       'cloud': self.server.answers.cloud_status()})
         if path == '/api/cleanup' and self.command == 'GET':
             return self.respond(200, {'items': store.pending_deletions()})
         if path == '/api/semantic/status' and self.command == 'GET':
-            return self.respond(200, self.server.embeddings.status())
+            return self.respond(200, semantic_status(self.server))
         if path == '/api/semantic/retry' and self.command == 'POST':
             return self.respond(200, self.server.embeddings.retry())
         if path == '/api/documents/semantic-search' and self.command == 'GET':
@@ -123,7 +129,7 @@ class Handler(BaseHTTPRequestHandler):
             query = urllib.parse.parse_qs(parsed.query)
             args = {k: query.get(k, [''])[0] for k in ('query', 'tag', 'since', 'until')}
             return self.respond(200, {'items': store.search(**args),
-                                      'semantic': self.server.embeddings.status(),
+                                      'semantic': semantic_status(self.server),
                                       'mode': 'exact'})
         if path == '/api/documents' and self.command == 'POST':
             data = base64.b64decode(body.get('data', ''), validate=True)
@@ -163,7 +169,7 @@ class Handler(BaseHTTPRequestHandler):
             self.respond(404, {'error': '资料不存在'})
         except SemanticUnavailable as exc:
             self.respond(409, {'error': str(exc)[:300],
-                               'semantic': self.server.embeddings.status()})
+                               'semantic': semantic_status(self.server)})
         except (ValueError, TypeError, UnicodeError) as exc:
             self.respond(400, {'error': str(exc)[:300]})
         except CloudError as exc:

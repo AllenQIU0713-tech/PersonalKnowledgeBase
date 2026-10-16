@@ -1,35 +1,51 @@
 # S2R3 evidence-gate candidate handoff
 
-Status: developer candidate prepared for independent review. This does not enable formal QA, certify any reviewer model, or change `calibration_required`.
+Status: isolated candidate revision in progress. This does not enable formal QA, certify any reviewer model, or change `calibration_required`.
 
 ## Candidate boundary
 
-- Parent behavior baseline: S2R2 commit `4e8e8cac10452b5e0b565902bd191acba90dd26f`; that commit is unchanged.
-- Candidate commit: `9a5596e40c8904b42bd6f019de8e88a73f83decc`.
-- New pipeline version: `s2r3-evidence-gate-v1`.
-- Production `server.py` constructs `Answers` without an evidence pipeline. Answer preview therefore reports `blocked_by_missing_reviewer`; cloud preparation and mock answer generation cannot bypass that state.
-- Local semantic browsing remains on the separate `/api/documents/semantic-search` path.
+- Parent behavior baseline: S2R2 commit `4e8e8cac10452b5e0b565902bd191acba90dd26f`; that commit remains unchanged.
+- Previous static-review candidate: `9a5596e40c8904b42bd6f019de8e88a73f83decc`; preserve its audit evidence as-is.
+- New candidate commit: fill after this revision is committed.
+- Production `server.py` constructs `Answers` without an evidence pipeline. `/api/semantic/status` reports QA blocked when the vector index is ready but the reviewer is missing or unqualified; the UI disables QA controls from `qa.available`. Local semantic browsing reports its own index/service state and remains independent.
+- `Answers.prepare`, `Answers.generate`, confirmation rebuild, and confirmation snapshot validation re-check formal QA readiness in the backend. A test double or a direct API call cannot create a cloud confirmation or simulated answer while the reviewer/collection gate is unqualified; the UI disablement is not the security boundary.
+- Embedding/index failures stay explicit unavailable states; they do not become no-match results and never fall back to keyword retrieval.
 
-## Test injection seam
+## Reviewer identity and injection
 
-`Answers(..., evidence_pipeline=...)` accepts an explicitly constructed `EvidencePipeline`. The test task must provide its own deterministic reviewer double, configured only against the isolated synthetic fixture. The reviewer receives one `ReviewInput` at a time and must return the existing evidence-review result shape with matching `question_sha256`, `evidence_sha256`, passage ID, content version, qualification version, `config_signature` equal to the injected fixed reviewer signature, a `supported` verdict, and verbatim `evidence_quotes`. A double must never be configured by production startup or read real library data.
+`EvidencePipeline(reviewer)` reads a read-only `configuration` manifest and `config_signature` from the reviewer object. The manifest binds candidate identity, 64-character model/config digest, quantization, template version, settings, reviewer pipeline version, runtime version, and result-protocol version. The pipeline recomputes and checks the signature at construction, before reviews, after reviews and before returning a preview. Each result must carry matching question/evidence/source-version hashes and config/pipeline/runtime/protocol identifiers.
 
-`EvidencePipeline.review()` consumes at most 40 eligible semantic candidates. It rejects business-identifier mismatches before the reviewer, rejects non-supported verdicts and invalid quotes, and makes reviewer runtime/configuration failures unavailable. Only supported, quote-bearing passages can enter the 6-source, 2-per-document, 6000-character reviewed context. The quote must remain intact in the emitted source.
+The independent test task may inject a deterministic `test-double` with its own explicit configuration digest and signature. That signature only proves wiring identity; it is not a real model source, model-quality, calibration, or formal QA claim. The double must implement both `review(input)` and `review_set(question, evidence, comparison_plan, timeout_seconds=...)` using the frozen S2R3 result protocol. Production startup never constructs the test double.
+
+## Passage and evidence-set gates
+
+The answer-specific embedding path recalls up to 40 eligible passages in one local cosine index. It does not apply the cosine threshold as an answerability gate. Each passage is locally reviewed before it can become supported. Quotes must be continuous original substrings, non-whitespace, and contain at least one Unicode letter or number; they must remain present after the source/context budget. Rejected items return only reason-code counts in the QA preview response, with no rejected passage text, title, or selectable ID. Open the independent local browse feature to inspect related material and its privacy/qualification state.
+
+All supported candidates are retained internally for the consistency check. The proposed answer set is the deterministic ranked subset after the six-source, two-per-document, 6000-character rules. Candidate `s2r3-evidence-set-review-v1` policy is fixed:
+
+1. If the proposed set has more than one item, check all proposed-to-proposed pairs in one batch.
+2. Check every remaining supported candidate against the complete proposed set. Use ranked order and batches of at most two remaining candidates, so each batch has at most eight source records.
+3. Each batch declares `proposed_answer_evidence` versus `remaining_supported_evidence` roles and the exact pair list. The reviewer returns exact source coverage, checked pairs, verdict, and for conflict each source ID with an exact accepted quote.
+4. Per-batch serialized input cap is 16,000 characters; aggregate cap is 300,000 characters; maximum is 20 batches and 120 seconds total. The reviewer receives the remaining timeout for each batch. No passage or quote is silently truncated. Missing reviewer capability, invalid output, timeout, any conflict/uncertainty, budget exhaustion, or incomplete source/pair coverage blocks deterministic answers and cloud preparation.
+5. Per-batch audit data binds source IDs, proposed/remaining roles, input digest/size, pair-plan digest, verdict, conflicts/output summary, and reason code. The public preview exposes only aggregate counts/digests, except verified conflict sides and their exact quotes.
+
+A verified `consistent` result permits only the reviewed proposed evidence into `sources`. A `conflict` result displays both verified sides as read-only conflict groups, returns no selectable answer sources, and cannot be bypassed by posting one side's ID to cloud prepare. `uncertain` or incomplete coverage returns no source IDs or passages. Collection-level review remains candidate-only and cannot make the production readiness API report ready.
 
 ## Independent test scope
 
-The tester should build a new immutable run bundle under the product's test-freeze contract and check at least:
+Use a new immutable run bundle under the product freeze contract. Preserve the previous candidate and audit files. Verify at least:
 
-- missing reviewer blocks QA and does not create an outbound confirmation;
-- injected synthetic reviewer accepts a valid exact quote and preserves its source/version metadata;
-- insufficient, mismatch, uncertain, business-ID mismatch, malformed result, forged quote, and runtime failure fail closed;
-- passage/document and total context limits are enforced without dropping the required quote;
-- cloud preparation accepts only reviewed chunk IDs and confirmation rebuild rejects changed reviewer/pipeline/evidence snapshots;
-- source qualification/index changes invalidate the reviewed preview;
-- local semantic browse continues independently.
+- missing reviewer with embedding/index ready: QA API/UI blocked while local browse remains ready; index failure remains visibly unavailable;
+- empty/whitespace/punctuation-only/forged/truncated quotes reject; valid Chinese/date quotes can pass the wiring gate;
+- reviewer manifest signature, result protocol, runtime/config drift and source-version mismatches fail closed;
+- all supported candidates through rank 40 enter the fixed coverage ledger; a contradictory rank-7-or-later item blocks;
+- selected-pair and selected-versus-remainder consistency, conflict, uncertain, malformed IDs/quotes, and invalid `checked_pairs` behave as specified;
+- boundary exhaustion of per-batch/aggregate chars, batch count and elapsed time yields `uncertain` without truncation or a cloud ticket;
+- conflict pages show both exact sides read-only, single-side prepare is rejected, and source/index/reviewer changes invalidate confirmation;
+- rejected passage bodies and IDs do not appear in QA preview JSON; cloud payload, history and outbound records contain only selected consistent reviewed evidence.
 
-This list describes developer-visible interfaces and expected coverage; the test task owns the executable oracle, registry, fixtures, and run manifests. Development did not run the test suite.
+These are handoff expectations, not developer-run tests. Include direct backend/API attempts against prepare, mock generate, rebuild, and confirm with a `test-double` reviewer that is not formally qualified; each must remain blocked even when its candidate-only evidence-set result is `consistent`. The test task owns all executable oracle, registry, fixture, run bundle and execution. Development has not run tests.
 
 ## Non-claims
 
-This candidate does not prove reviewer quality, answerability accuracy, model calibration, formal local QA availability, full UI acceptance, real browser behavior, real DeepSeek behavior, cloud consent correctness end to end, security audit, release readiness, or Q6_K provenance. No formal-library data or real DeepSeek request was used. No model, package, or build tool was downloaded, installed, built, converted, or launched.
+This candidate does not prove reviewer model quality, answerability accuracy, conflict-review accuracy, latency/resource acceptance, formal local QA availability, complete UI acceptance, real browser behavior, real DeepSeek behavior, security-audit completion, release readiness, or Q6_K provenance. No formal-library data or real DeepSeek request was used. No model, package, or build tool was downloaded, installed, built, converted, or launched.

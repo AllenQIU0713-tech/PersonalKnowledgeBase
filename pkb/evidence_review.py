@@ -3,6 +3,7 @@ from dataclasses import dataclass
 import hashlib
 import json
 import math
+import copy
 from pathlib import Path
 import re
 import selectors
@@ -22,6 +23,8 @@ RERANKER_MODEL_SHA256 = '22c9979ce4fbcdc5acdc310c6641c32797eff1aa980b8f7a2db8a8e
 INSTRUCT_MODEL_SHA256 = '3605803b982cb64aead44f6c1b2ae36e3acdb41d8e46c8a94c6533bc4c67e597'
 RERANKER_QUANT = 'Q8_0'
 INSTRUCT_QUANT = 'Q4_K_M'
+REVIEW_RUNTIME_VERSION = 'unverified-local-runtime'
+RESULT_PROTOCOL_VERSION = 'qualified-evidence-json-v1'
 MAX_QUESTION_CHARS = 2000
 MAX_TITLE_CHARS = 500
 MAX_BODY_CHARS = 1200
@@ -136,18 +139,23 @@ class ReviewInput:
 
 def configuration_signature(candidate, model_sha256, quantization,
                             template_version, settings,
-                            pipeline_version=PIPELINE_VERSION):
+                            pipeline_version=PIPELINE_VERSION,
+                            runtime_version=REVIEW_RUNTIME_VERSION,
+                            result_protocol_version=RESULT_PROTOCOL_VERSION):
     return _canonical_hash({
         'pipeline_version': pipeline_version,
         'business_id_version': BUSINESS_ID_VERSION,
         'candidate': candidate, 'model_sha256': model_sha256,
         'quantization': quantization, 'template_version': template_version,
-        'settings': settings,
+        'settings': settings, 'runtime_version': runtime_version,
+        'result_protocol_version': result_protocol_version,
     })
 
 
 def _base_result(item, candidate, model_sha256, quantization,
-                 template_version, settings, pipeline_version=PIPELINE_VERSION):
+                 template_version, settings, pipeline_version=PIPELINE_VERSION,
+                 runtime_version=REVIEW_RUNTIME_VERSION,
+                 result_protocol_version=RESULT_PROTOCOL_VERSION):
     return {
         'query_id': item.query_id, 'passage_id': item.passage_id,
         'question_sha256': item.question_hash,
@@ -155,12 +163,14 @@ def _base_result(item, candidate, model_sha256, quantization,
         'content_version': item.content_version,
         'qualification_version': item.qualification_version,
         'pipeline_version': pipeline_version,
+        'runtime_version': runtime_version,
+        'result_protocol_version': result_protocol_version,
         'business_id_version': BUSINESS_ID_VERSION,
         'candidate': candidate, 'model_sha256': model_sha256,
         'quantization': quantization, 'template_version': template_version,
         'config_signature': configuration_signature(
             candidate, model_sha256, quantization, template_version, settings,
-            pipeline_version),
+            pipeline_version, runtime_version, result_protocol_version),
     }
 
 
@@ -181,6 +191,20 @@ class RerankerReviewer:
         self.timeout = float(timeout)
         if not 0 < self.timeout <= 300:
             raise ReviewError('invalid_timeout')
+        self._configuration = {
+            'candidate': self.candidate, 'model_sha256': RERANKER_MODEL_SHA256,
+            'quantization': RERANKER_QUANT,
+            'template_version': RERANKER_TEMPLATE_VERSION,
+            'settings': dict(self.settings), 'pipeline_version': PIPELINE_VERSION,
+            'runtime_version': REVIEW_RUNTIME_VERSION,
+            'result_protocol_version': RESULT_PROTOCOL_VERSION,
+        }
+        self._config_signature = configuration_signature(
+            self._configuration['candidate'], self._configuration['model_sha256'],
+            self._configuration['quantization'], self._configuration['template_version'],
+            self._configuration['settings'], self._configuration['pipeline_version'],
+            self._configuration['runtime_version'],
+            self._configuration['result_protocol_version'])
         self.process = subprocess.Popen(
             [str(Path(executable).resolve()), '--model', str(Path(model_path).resolve())],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
@@ -198,6 +222,14 @@ class RerankerReviewer:
     def __enter__(self):
         return self
 
+    @property
+    def configuration(self):
+        return copy.deepcopy(self._configuration)
+
+    @property
+    def config_signature(self):
+        return self._config_signature
+
     def __exit__(self, *args):
         self.close()
 
@@ -207,7 +239,9 @@ class RerankerReviewer:
         allowed, missing = business_identifier_gate(item.question, item.title, item.body)
         base = _base_result(item, self.candidate, RERANKER_MODEL_SHA256,
                             RERANKER_QUANT, RERANKER_TEMPLATE_VERSION,
-                            self.settings)
+                            self.settings, self.configuration['pipeline_version'],
+                            self.configuration['runtime_version'],
+                            self.configuration['result_protocol_version'])
         if not allowed:
             return _finish(base, started, accepted=False,
                            gate='business_identifier_mismatch',
@@ -268,6 +302,21 @@ class InstructReviewer:
         self.timeout = float(timeout)
         if not 0 < self.timeout <= 300:
             raise ReviewError('invalid_timeout')
+        self._configuration = {
+            'candidate': self.candidate, 'model_sha256': INSTRUCT_MODEL_SHA256,
+            'quantization': INSTRUCT_QUANT,
+            'template_version': INSTRUCT_TEMPLATE_VERSION,
+            'settings': dict(self.settings),
+            'pipeline_version': INSTRUCT_PIPELINE_VERSION,
+            'runtime_version': REVIEW_RUNTIME_VERSION,
+            'result_protocol_version': RESULT_PROTOCOL_VERSION,
+        }
+        self._config_signature = configuration_signature(
+            self._configuration['candidate'], self._configuration['model_sha256'],
+            self._configuration['quantization'], self._configuration['template_version'],
+            self._configuration['settings'], self._configuration['pipeline_version'],
+            self._configuration['runtime_version'],
+            self._configuration['result_protocol_version'])
         self.opener = opener or urllib.request.build_opener(
             urllib.request.ProxyHandler({}), NoRedirect())
 
@@ -283,6 +332,7 @@ class InstructReviewer:
             },
             'required': ['verdict', 'evidence_quotes'],
         }
+
         user = 'QUERY:\n%s\n\nDOCUMENT TITLE:\n%s\n\nDOCUMENT PASSAGE:\n%s' % (
             item.question, item.title, item.body)
         return {
@@ -295,13 +345,23 @@ class InstructReviewer:
                 'name': 'evidence_review', 'strict': True, 'schema': schema}},
         }
 
+    @property
+    def configuration(self):
+        return copy.deepcopy(self._configuration)
+
+    @property
+    def config_signature(self):
+        return self._config_signature
+
     def review(self, item):
         item.validate()
         started = time.monotonic()
         allowed, missing = business_identifier_gate(item.question, item.title, item.body)
         base = _base_result(item, self.candidate, INSTRUCT_MODEL_SHA256,
                             INSTRUCT_QUANT, INSTRUCT_TEMPLATE_VERSION,
-                            self.settings, INSTRUCT_PIPELINE_VERSION)
+                            self.settings, INSTRUCT_PIPELINE_VERSION,
+                            self.configuration['runtime_version'],
+                            self.configuration['result_protocol_version'])
         base['reviewer_settings'] = self.settings
         if not allowed:
             return _finish(base, started, accepted=False,

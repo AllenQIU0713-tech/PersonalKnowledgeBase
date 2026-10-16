@@ -109,6 +109,35 @@ class Answers:
                     payload_hash TEXT NOT NULL, status TEXT NOT NULL);
             ''')
 
+    def qa_status(self, semantic=None):
+        semantic = semantic or self.embeddings.status()
+        blockers = []
+        if semantic.get('state') != 'ready':
+            blockers.append('本地语义索引未就绪')
+        if self.evidence_pipeline is None:
+            blockers.append('本地证据复核器未配置')
+        elif getattr(self.evidence_pipeline, 'formally_qualified', False) is not True:
+            blockers.append('证据复核器尚未完成质量与来源验证')
+        if (self.evidence_pipeline is None or
+                getattr(self.evidence_pipeline, 'conflict_detection_state', 'not_implemented')
+                != 'verified'):
+            blockers.append('跨资料矛盾判定尚未实现并验证')
+        if blockers:
+            if semantic.get('state') != 'ready':
+                state = 'blocked_by_semantic_index'
+            elif self.evidence_pipeline is None:
+                state = 'blocked_by_missing_reviewer'
+            elif getattr(self.evidence_pipeline, 'formally_qualified', False) is not True:
+                state = 'blocked_by_unqualified_reviewer'
+            else:
+                state = 'blocked_by_unimplemented_conflict_check'
+            return {'state': state, 'available': False,
+                    'reason': '；'.join(blockers) + '；问答保持关闭。',
+                    'conflict_detection': 'not_implemented'}
+        return {'state': 'ready', 'available': True,
+                'reason': '本地语义索引、证据复核器和跨资料矛盾门禁均已完成验证。',
+                'conflict_detection': 'verified'}
+
     def cloud_status(self):
         model = os.environ.get('DEEPSEEK_MODEL', DEEPSEEK_MODELS[0]).strip()
         if model not in DEEPSEEK_MODELS:
@@ -117,6 +146,15 @@ class Answers:
                 'model': model, 'models': list(DEEPSEEK_MODELS),
                 'destination': self.cloud.destination, 'terms_url': DEEPSEEK_TERMS,
                 'privacy_url': DEEPSEEK_PRIVACY}
+
+    def _require_qa_ready(self):
+        status = self.qa_status()
+        if status.get('available') is not True:
+            raise EvidenceUnavailable(status.get('reason') or
+                                      '本地问答门禁未就绪，不能生成或准备回答')
+        if self.evidence_pipeline is None:
+            raise EvidenceUnavailable('本地证据复核器未配置，不能生成或准备回答')
+        self.evidence_pipeline.assert_current()
 
     def reconcile_legacy_sources(self):
         """Apply the user-approved one-time cleanup for pre-v2 answer history."""
@@ -160,34 +198,74 @@ class Answers:
             raise ValueError('问题须为 1–2000 字')
         question = question.strip()
         if self.evidence_pipeline is None:
-            return {'question': question, 'sources': [], 'related_sources': [],
-                    'available': False, 'qa_state': 'blocked_by_missing_reviewer',
+            semantic = self.embeddings.status()
+            semantic_ready = semantic.get('state') == 'ready'
+            return {'question': question, 'sources': [], 'conflicts': [],
+                    'review_diagnostics': {'rejection_counts': {}},
+                    'available': False, 'qa_state': 'blocked_by_missing_reviewer'
+                    if semantic_ready else 'blocked_by_semantic_index',
                     'retrieval': {'mode': 'semantic', 'state': 'evidence_unavailable',
-                                  'reason': '本地证据复核器尚未完成配置与质量验证，问答暂不可用。'},
+                                  'reason': ('本地语义索引尚未就绪：' + str(semantic.get('reason'))
+                                             if not semantic_ready else
+                                             '本地证据复核器尚未完成配置与质量验证，问答暂不可用。'),
+                                  'index': semantic},
                     'has_excluded_local': False, 'history': [],
                     'history_policy': '不发送历史消息；每次从当前允许使用的资料重新组装。'}
 
         items, retrieval = self.embeddings.retrieve_answer_candidates(question)
+        qa_readiness = self.qa_status()
         if retrieval.get('state') == 'no_evidence':
-            return {'question': question, 'sources': [], 'related_sources': [],
-                    'available': True, 'qa_state': 'insufficient_evidence',
+            retrieval = dict(retrieval)
+            self.evidence_pipeline.assert_current()
+            retrieval['review_pipeline_version'] = self.evidence_pipeline.pipeline_version
+            retrieval['reviewer_signature'] = self.evidence_pipeline.reviewer_signature
+            if not qa_readiness.get('available'):
+                retrieval['reason'] = qa_readiness['reason']
+            return {'question': question, 'sources': [], 'conflicts': [],
+                    'review_diagnostics': {'rejection_counts': {}},
+                    'available': qa_readiness.get('available') is True, 'reviewed': True,
+                    'qa_state': 'insufficient_evidence' if qa_readiness.get('available')
+                    else qa_readiness['state'],
                     'retrieval': retrieval, 'has_excluded_local': False,
                     'history': [], 'history_policy':
                     '不发送历史消息；每次从当前允许使用的资料重新组装。'}
         snapshot = self.evidence_pipeline.review(
             question, items, retrieval.get('index'))
         sources = [dict(source) for source in snapshot.sources]
-        related_sources = [dict(source) for source in snapshot.related_sources]
+        conflicts = [dict(group) for group in snapshot.conflicts]
         retrieval = dict(retrieval)
         retrieval['review_pipeline_version'] = snapshot.pipeline_version
         retrieval['reviewer_signature'] = snapshot.reviewer_signature
         retrieval['reviewed_snapshot_sha256'] = snapshot.snapshot_sha256
-        if not sources:
+        retrieval['conflict_state'] = snapshot.conflict_state
+        retrieval['set_review_batch_count'] = len(snapshot.set_review_batches)
+        retrieval['set_review_batches_sha256'] = hashlib.sha256(json.dumps(
+            list(snapshot.set_review_batches), ensure_ascii=False, sort_keys=True,
+            separators=(',', ':')).encode()).hexdigest()
+        conflict_blocked = snapshot.conflict_state in ('conflict', 'uncertain', 'unavailable')
+        if snapshot.conflict_state == 'conflict':
+            retrieval['reason'] = ('资料之间存在矛盾，已同时列出冲突原文；'
+                                   '当前不生成确定性回答。')
+        elif snapshot.conflict_state == 'uncertain':
+            retrieval['reason'] = ('资料集合一致性复核未能完整完成或结论不确定；'
+                                   '当前不生成回答。')
+        elif snapshot.conflict_state == 'unavailable':
+            retrieval['reason'] = '本地资料集合复核能力不可用，当前不生成回答。'
+        elif not qa_readiness.get('available'):
+            retrieval['reason'] = qa_readiness['reason']
+        elif not sources:
             retrieval['reason'] = ('没有资料片段通过本地证据复核，资料不足以回答。'
                                    '相关资料如需查看，请使用独立的本地语义浏览。')
         context = {'question': question, 'sources': sources,
-                   'related_sources': related_sources, 'available': True,
-                   'qa_state': 'evidence_ready' if sources else 'insufficient_evidence',
+                   'conflicts': conflicts,
+                   'review_diagnostics': {'rejection_counts': snapshot.rejection_counts,
+                                          'set_review_batch_count': len(snapshot.set_review_batches)},
+                   'available': (not conflict_blocked and
+                                 qa_readiness.get('available') is True),
+                   'reviewed': True,
+                   'qa_state': 'blocked_by_evidence_' + snapshot.conflict_state if conflict_blocked
+                   else qa_readiness['state'] if not qa_readiness.get('available')
+                   else 'evidence_ready' if sources else 'insufficient_evidence',
                    'retrieval': retrieval, 'has_excluded_local':
                        bool(retrieval.get('index', {}).get('excluded', 0)),
                    'history': [],
@@ -231,6 +309,7 @@ class Answers:
         return hashlib.sha256(canonical.encode()).hexdigest()
 
     def prepare(self, question, selected, model=None):
+        self._require_qa_ready()
         status = self.cloud_status()
         model = model or status['model']
         if model not in DEEPSEEK_MODELS:
@@ -280,6 +359,7 @@ class Answers:
         return {'cancelled': bool(removed), 'sent': False}
 
     def _rebuild(self, record):
+        self._require_qa_ready()
         context = self.context(record['question'])
         if not context.get('available'):
             raise ValueError('本地证据复核已不可用，请重新准备并确认')
@@ -302,6 +382,12 @@ class Answers:
         return context, payload
 
     def _validate_locked_snapshot(self, record):
+        self._require_qa_ready()
+        if self.evidence_pipeline is None:
+            raise ValueError('本地证据复核已不可用，请重新准备并确认')
+        self.evidence_pipeline.assert_current()
+        if self.evidence_pipeline.reviewer_signature != record['reviewer_signature']:
+            raise ValueError('证据复核配置已变化，请重新准备并确认')
         status = self.embeddings.status()
         semantic = {key: status[key]
                     for key in ('signature','generation','revision','threshold')}
@@ -317,8 +403,15 @@ class Answers:
                     raise ValueError('参与请求的资料内容或资格已变化，请重新准备并确认')
 
     def _validate_context_locked(self, context):
-        if not context.get('available'):
+        if not context.get('reviewed'):
             raise ValueError('本地证据复核已不可用，请重新提问')
+        if self.evidence_pipeline is None:
+            raise ValueError('本地证据复核已不可用，请重新提问')
+        self.evidence_pipeline.assert_current()
+        expected_reviewer_signature = context['retrieval'].get('reviewer_signature')
+        if (expected_reviewer_signature is not None and
+                expected_reviewer_signature != self.evidence_pipeline.reviewer_signature):
+            raise ValueError('证据复核配置已变化，请重新提问')
         expected = {key: context['retrieval']['index'][key]
                     for key in ('signature','generation','revision','threshold')}
         status = self.embeddings.status()
@@ -383,6 +476,7 @@ class Answers:
     def generate(self, question, provider):
         if provider != 'mock':
             raise ValueError('云端回答必须先准备内容并逐次确认')
+        self._require_qa_ready()
         adapter = MockProvider()
         context, identifier = self.context(question), uid()
         if not context.get('available'):

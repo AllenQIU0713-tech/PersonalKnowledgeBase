@@ -1,5 +1,7 @@
 # S2R3 Evidence Gate Integration Plan
 
+> **Status:** Initial integration scope; its unresolved static-audit remediation is tracked by the authoritative follow-up plan `2026-10-17-s2r3-audit-remediation.md`.
+
 > **For agentic workers:** Implement this plan inline in small reviewable steps. Independent testing is owned by the test task; the developer must not run tests or modify test oracles.
 
 **Goal:** Wire a fail-closed evidence-review gate into the answer path, with an explicitly injected deterministic reviewer substitute usable only by isolated synthetic tests, while preserving the unchanged S2R2 candidate and formal `calibration_required` state.
@@ -52,7 +54,7 @@
 - Consume: `pkb/evidence_review.py:ReviewInput`
 
 **Interface:**
-- `EvidencePipeline(reviewer, pipeline_version, reviewer_signature)`
+- `EvidencePipeline(reviewer, pipeline_version)`; derives reviewer signature from `reviewer.configuration` and validates `reviewer.signature`
 - `EvidencePipeline.review(question, candidates, index_snapshot) -> ReviewedSnapshot`
 - Each reviewer implements `review(ReviewInput) -> mapping` with a fixed `candidate`, signature, and output shape.
 
