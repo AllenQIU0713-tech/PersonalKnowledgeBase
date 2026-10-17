@@ -1,0 +1,12 @@
+{
+  "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20260623/cpython-3.12.13%2B20260623-aarch64-apple-darwin-install_only_stripped.tar.gz",
+  "method": "HEAD",
+  "time": "2026-10-17T18:01:20.613062+00:00",
+  "artifact_body_bytes": 0,
+  "status": 200,
+  "final_origin": "https://release-assets.githubusercontent.com",
+  "final_path": "/github-production-release-asset/162334160/b559e897-d2f7-4103-9b67-ac078ce1fb52",
+  "bytes": 0,
+  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "content_length": "25003823"
+}

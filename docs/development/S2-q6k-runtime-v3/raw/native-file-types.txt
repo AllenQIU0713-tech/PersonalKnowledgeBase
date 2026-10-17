@@ -1,0 +1,11 @@
+/Users/allenqiu/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/bin/python3.12:                                            Mach-O 64-bit executable arm64
+/Users/allenqiu/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/itcl4.3.5/libitcl4.3.5.dylib:                          Mach-O 64-bit dynamically linked shared library arm64
+/Users/allenqiu/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/itcl4.3.5/libtcl9itcl4.3.5.dylib:                      Mach-O 64-bit dynamically linked shared library arm64
+/Users/allenqiu/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/libpython3.12.dylib:                                   Mach-O 64-bit dynamically linked shared library arm64
+/Users/allenqiu/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/libtcl9.0.dylib:                                       Mach-O 64-bit dynamically linked shared library arm64
+/Users/allenqiu/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/libtcl9tk9.0.dylib:                                    Mach-O 64-bit dynamically linked shared library arm64
+/Users/allenqiu/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/lib-dynload/_crypt.cpython-312-darwin.so:   Mach-O 64-bit bundle arm64
+/Users/allenqiu/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/lib-dynload/_dbm.cpython-312-darwin.so:     Mach-O 64-bit bundle arm64
+/Users/allenqiu/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/lib-dynload/_tkinter.cpython-312-darwin.so: Mach-O 64-bit bundle arm64
+/Users/allenqiu/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/thread3.0.4/libtcl9thread3.0.4.dylib:                  Mach-O 64-bit dynamically linked shared library arm64
+/Users/allenqiu/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/thread3.0.4/libthread3.0.4.dylib:                      Mach-O 64-bit dynamically linked shared library arm64

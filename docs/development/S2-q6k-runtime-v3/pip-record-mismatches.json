@@ -1,0 +1,71 @@
+{
+  "mismatches": [
+    {
+      "relative_path": "../../../bin/pip",
+      "expected_bytes": 252,
+      "actual_bytes": 234,
+      "expected_sha256": "888c1a5cbdb750f990720650ce780ceb140ec5c313b59e5cc700db36c7fee80a",
+      "actual_sha256": "2512b888ea03cb94e56eaf7db265a58cb13ac0fa21b2c6ed4a44ea95fda5bed3",
+      "current_wrapper_text": "#!/bin/sh\n'''exec' \"$(dirname -- \"$(realpath -- \"$0\")\")/python3.12\" \"$0\" \"$@\"\n' '''\nimport sys\nfrom pip._internal.cli.main import main\nif __name__ == '__main__':\n    sys.argv[0] = sys.argv[0].removesuffix('.exe')\n    sys.exit(main())\n"
+    },
+    {
+      "relative_path": "../../../bin/pip3",
+      "expected_bytes": 252,
+      "actual_bytes": 234,
+      "expected_sha256": "888c1a5cbdb750f990720650ce780ceb140ec5c313b59e5cc700db36c7fee80a",
+      "actual_sha256": "2512b888ea03cb94e56eaf7db265a58cb13ac0fa21b2c6ed4a44ea95fda5bed3",
+      "current_wrapper_text": "#!/bin/sh\n'''exec' \"$(dirname -- \"$(realpath -- \"$0\")\")/python3.12\" \"$0\" \"$@\"\n' '''\nimport sys\nfrom pip._internal.cli.main import main\nif __name__ == '__main__':\n    sys.argv[0] = sys.argv[0].removesuffix('.exe')\n    sys.exit(main())\n"
+    },
+    {
+      "relative_path": "../../../bin/pip3.12",
+      "expected_bytes": 252,
+      "actual_bytes": 234,
+      "expected_sha256": "888c1a5cbdb750f990720650ce780ceb140ec5c313b59e5cc700db36c7fee80a",
+      "actual_sha256": "2512b888ea03cb94e56eaf7db265a58cb13ac0fa21b2c6ed4a44ea95fda5bed3",
+      "current_wrapper_text": "#!/bin/sh\n'''exec' \"$(dirname -- \"$(realpath -- \"$0\")\")/python3.12\" \"$0\" \"$@\"\n' '''\nimport sys\nfrom pip._internal.cli.main import main\nif __name__ == '__main__':\n    sys.argv[0] = sys.argv[0].removesuffix('.exe')\n    sys.exit(main())\n"
+    },
+    {
+      "relative_path": "pip/_vendor/distlib/t32.exe",
+      "expected_bytes": 97792,
+      "actual_bytes": 97792,
+      "expected_sha256": "6b4195e640a85ac32eb6f9628822a622057df1e459df7c17a12f97aeabc9415b",
+      "actual_sha256": "5fd873e09786a1eaabaa44261e9e30609d88745da040ebb702c1a5069ab345ca"
+    },
+    {
+      "relative_path": "pip/_vendor/distlib/t64-arm.exe",
+      "expected_bytes": 182784,
+      "actual_bytes": 182784,
+      "expected_sha256": "ebc4c06b7d95e74e315419ee7e88e1d0f71e9e9477538c00a93a9ff8c66a6cfc",
+      "actual_sha256": "81f7936c6d05cadd4a185bb9a8a64abe9a72c937ad979ea5afe672de59123fcc"
+    },
+    {
+      "relative_path": "pip/_vendor/distlib/t64.exe",
+      "expected_bytes": 108032,
+      "actual_bytes": 108032,
+      "expected_sha256": "81a618f21cb87db9076134e70388b6e9cb7c2106739011b6a51772d22cae06b7",
+      "actual_sha256": "acd47a82dc01132e3b8414f683c2e117c18aedbf650a370249fe9fdbc445cda1"
+    },
+    {
+      "relative_path": "pip/_vendor/distlib/w32.exe",
+      "expected_bytes": 91648,
+      "actual_bytes": 91648,
+      "expected_sha256": "47872cc77f8e18cf642f868f23340a468e537e64521d9a3a416c8b84384d064b",
+      "actual_sha256": "f27b3724964ff524e837374847d2856f7d10a884516fc34200d0a2332a739789"
+    },
+    {
+      "relative_path": "pip/_vendor/distlib/w64-arm.exe",
+      "expected_bytes": 168448,
+      "actual_bytes": 168448,
+      "expected_sha256": "c5dc9884a8f458371550e09bd396e5418bf375820a31b9899f6499bf391c7b2e",
+      "actual_sha256": "f6704d3a1022f69ad6b7e604a927d00ce2f9dae515bfad5a7df9a2e3e4bd2448"
+    },
+    {
+      "relative_path": "pip/_vendor/distlib/w64.exe",
+      "expected_bytes": 101888,
+      "actual_bytes": 101888,
+      "expected_sha256": "7a319ffaba23a017d7b1e18ba726ba6c54c53d6446db55f92af53c279894f8ad",
+      "actual_sha256": "55b21889fd3d28799b834fba3d29482e7aa1b0519864b790e3914af7cdda666b"
+    }
+  ],
+  "disposition": "unexplained; no repair; cannot claim frontend integrity passed"
+}

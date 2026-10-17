@@ -1,0 +1,58 @@
+/Users/allenqiu/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/bin/python3.12:
+	/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation (compatibility version 150.0.0, current version 3502.1.255)
+	/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1351.0.0)
+	/usr/lib/libncurses.5.4.dylib (compatibility version 5.4.0, current version 5.4.0)
+	/usr/lib/libpanel.5.4.dylib (compatibility version 5.4.0, current version 5.4.0)
+	/System/Library/Frameworks/SystemConfiguration.framework/Versions/A/SystemConfiguration (compatibility version 1.0.0, current version 1351.120.3)
+	/usr/lib/libedit.3.dylib (compatibility version 2.0.0, current version 3.0.0)
+	/usr/lib/libz.1.dylib (compatibility version 1.0.0, current version 1.2.12)
+/Users/allenqiu/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/itcl4.3.5/libitcl4.3.5.dylib:
+	libitcl4.3.5.dylib (compatibility version 4.3.5, current version 4.3.5)
+	/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1351.0.0)
+/Users/allenqiu/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/itcl4.3.5/libtcl9itcl4.3.5.dylib:
+	libtcl9itcl4.3.5.dylib (compatibility version 4.3.5, current version 4.3.5)
+	/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1351.0.0)
+/Users/allenqiu/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/libpython3.12.dylib:
+	/Users/allenqiu/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/libpython3.12.dylib (compatibility version 3.12.0, current version 3.12.0)
+	/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1351.0.0)
+	/usr/lib/libncurses.5.4.dylib (compatibility version 5.4.0, current version 5.4.0)
+	/usr/lib/libpanel.5.4.dylib (compatibility version 5.4.0, current version 5.4.0)
+	/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation (compatibility version 150.0.0, current version 3502.1.255)
+	/System/Library/Frameworks/SystemConfiguration.framework/Versions/A/SystemConfiguration (compatibility version 1.0.0, current version 1351.120.3)
+	/usr/lib/libedit.3.dylib (compatibility version 2.0.0, current version 3.0.0)
+	/usr/lib/libz.1.dylib (compatibility version 1.0.0, current version 1.2.12)
+/Users/allenqiu/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/libtcl9.0.dylib:
+	@rpath/libtcl9.0.dylib (compatibility version 9.0.0, current version 9.0.3)
+	/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1351.0.0)
+	/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation (compatibility version 150.0.0, current version 3502.1.255)
+/Users/allenqiu/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/libtcl9tk9.0.dylib:
+	@rpath/libtcl9tk9.0.dylib (compatibility version 9.0.0, current version 9.0.3)
+	/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation (compatibility version 150.0.0, current version 3502.1.255)
+	/usr/lib/libobjc.A.dylib (compatibility version 1.0.0, current version 228.0.0)
+	/System/Library/Frameworks/Cocoa.framework/Versions/A/Cocoa (compatibility version 1.0.0, current version 24.0.0)
+	/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit (compatibility version 45.0.0, current version 2575.60.5)
+	/System/Library/Frameworks/ApplicationServices.framework/Versions/A/ApplicationServices (compatibility version 1.0.0, current version 65.0.0)
+	/System/Library/Frameworks/CoreGraphics.framework/Versions/A/CoreGraphics (compatibility version 64.0.0, current version 1889.5.3)
+	/System/Library/Frameworks/CoreServices.framework/Versions/A/CoreServices (compatibility version 1.0.0, current version 1226.0.0)
+	/System/Library/Frameworks/CoreText.framework/Versions/A/CoreText (compatibility version 1.0.0, current version 844.5.0)
+	/System/Library/Frameworks/Foundation.framework/Versions/C/Foundation (compatibility version 300.0.0, current version 3502.1.255)
+	/System/Library/Frameworks/Carbon.framework/Versions/A/Carbon (compatibility version 2.0.0, current version 170.0.0)
+	/System/Library/Frameworks/IOKit.framework/Versions/A/IOKit (compatibility version 1.0.0, current version 275.0.0)
+	/System/Library/Frameworks/QuartzCore.framework/Versions/A/QuartzCore (compatibility version 1.2.0, current version 1.11.0)
+	/System/Library/Frameworks/Security.framework/Versions/A/Security (compatibility version 1.0.0, current version 61439.120.27)
+	/System/Library/Frameworks/UniformTypeIdentifiers.framework/Versions/A/UniformTypeIdentifiers (compatibility version 1.0.0, current version 709.0.0, weak)
+	/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1351.0.0)
+/Users/allenqiu/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/lib-dynload/_crypt.cpython-312-darwin.so:
+	/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1351.0.0)
+/Users/allenqiu/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/lib-dynload/_dbm.cpython-312-darwin.so:
+	/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1351.0.0)
+/Users/allenqiu/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/lib-dynload/_tkinter.cpython-312-darwin.so:
+	@rpath/libtcl9.0.dylib (compatibility version 9.0.0, current version 9.0.3)
+	@rpath/libtcl9tk9.0.dylib (compatibility version 9.0.0, current version 9.0.3)
+	/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1351.0.0)
+/Users/allenqiu/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/thread3.0.4/libtcl9thread3.0.4.dylib:
+	libtcl9thread3.0.4.dylib (compatibility version 3.0.4, current version 3.0.4)
+	/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1351.0.0)
+/Users/allenqiu/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/thread3.0.4/libthread3.0.4.dylib:
+	libthread3.0.4.dylib (compatibility version 3.0.4, current version 3.0.4)
+	/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1351.0.0)

@@ -1,0 +1,20 @@
+[
+  {
+    "url": "https://github.com/astral-sh/uv/releases/download/0.11.26/dist-manifest.json",
+    "method": "GET",
+    "time": "2026-10-17T18:03:54.500024+00:00",
+    "artifact_body_bytes": 0,
+    "raw_file": "raw/uv-dist-manifest.json",
+    "bytes": 44981,
+    "sha256": "6748bd668526c88e53e3b9b17e87f318dd42d409d9888165123ff0ea59b1266e"
+  },
+  {
+    "url": "https://github.com/astral-sh/uv/releases/download/0.11.26/uv-aarch64-apple-darwin.tar.gz.sha256",
+    "method": "GET",
+    "time": "2026-10-17T18:03:55.840116+00:00",
+    "artifact_body_bytes": 0,
+    "raw_file": "raw/uv-arm64-archive.sha256",
+    "bytes": 97,
+    "sha256": "187d9cab3500eda4caab54f2e23c20f6e9072012818c3f010325c31ae3c3a815"
+  }
+]

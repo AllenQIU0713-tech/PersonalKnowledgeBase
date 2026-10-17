@@ -1,0 +1,6 @@
+[tool]
+requirements = [{ name = "browser-harness" }]
+python = "3.12"
+entrypoints = [
+    { name = "browser-harness", install-path = "/Users/allenqiu/.local/bin/browser-harness", from = "browser-harness" },
+]

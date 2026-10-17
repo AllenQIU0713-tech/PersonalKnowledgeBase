@@ -1,0 +1,23 @@
+Executable=/Users/allenqiu/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/bin/python3.12
+Identifier=-
+Format=Mach-O thin (arm64)
+CodeDirectory v=20400 size=140232 flags=0x20002(adhoc,linker-signed) hashes=4379+0 location=embedded
+VersionPlatform=1
+VersionMin=720896
+VersionSDK=984320
+Hash type=sha256 size=32
+CandidateCDHash sha256=d9d2c5c77a2bc37c7d75772c269cb171c13d8631
+CandidateCDHashFull sha256=d9d2c5c77a2bc37c7d75772c269cb171c13d8631bad9a7afd3cff40588010fa5
+Hash choices=sha256
+CMSDigest=d9d2c5c77a2bc37c7d75772c269cb171c13d8631bad9a7afd3cff40588010fa5
+CMSDigestType=2
+Executable Segment base=0
+Executable Segment limit=13287424
+Executable Segment flags=0x1
+Page size=4096
+CDHash=d9d2c5c77a2bc37c7d75772c269cb171c13d8631
+Signature=adhoc
+Info.plist=not bound
+TeamIdentifier=not set
+Sealed Resources=none
+Internal requirements=none
