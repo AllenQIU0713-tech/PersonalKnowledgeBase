@@ -1,0 +1,20 @@
+{
+  "created_at": "2026-10-18T13:59:14.402681+00:00",
+  "code_candidate": "afa5e393adf10fa03a4c1a87781557a0a20c2a06",
+  "baseline": "391baf9db5afcffd8e2de4ba65782a05b6426a98",
+  "contract": "787b51f5568acd9ae3a391f26de1bb7c85367d2e",
+  "developer_tests_run": 0,
+  "product_qa_enabled": false,
+  "files": [
+    {
+      "path": "handoff.md",
+      "bytes": 5799,
+      "sha256": "0e469b18ed71faedd8c21960b9fdbf8763e55e457172f8bdbb12841cb69d49cd"
+    },
+    {
+      "path": "source-closure.json",
+      "bytes": 5555,
+      "sha256": "4ce366706a2e3e4daaf9fbd3c6b7ea1157a6d6bff6899f25ec0a75598a6cc95c"
+    }
+  ]
+}

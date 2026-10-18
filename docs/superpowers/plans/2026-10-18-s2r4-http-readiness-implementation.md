@@ -21,5 +21,5 @@
 - [x] Confirm current/history exception-to-status mapping and bind the product contract.
 - [x] Apply exactly the necessary import and typed `except` tuple in `pkb/server.py`.
 - [x] Review the static diff: no other product-code changes; generic400, authentication, preview, browse and qualification code remain intact.
-- [ ] Commit a new immutable code candidate; generate the full pkb Git-blob SHA-256 source closure and a concise historical/current HTTP mapping handoff.
-- [ ] Deliver the fixed candidate to independent test and audit chats. New execution uses a new profile/package/witness; prior successful results keep their original SHA.
+- [x] Commit a new immutable code candidate; generate the full pkb Git-blob SHA-256 source closure and a concise historical/current HTTP mapping handoff.
+- [x] Deliver the fixed candidate to independent test and audit chats. New execution uses a new profile/package/witness; prior successful results keep their original SHA.
