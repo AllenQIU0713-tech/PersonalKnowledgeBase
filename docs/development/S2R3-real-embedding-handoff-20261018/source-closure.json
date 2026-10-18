@@ -1,0 +1,119 @@
+{
+  "candidate_commit": "391baf9db5afcffd8e2de4ba65782a05b6426a98",
+  "scope": "full pkb tree at fixed candidate; assembly stays in test-owned new isolated bundle",
+  "files": [
+    {
+      "path": "pkb/__init__.py",
+      "bytes": 37,
+      "sha256": "e46167101f3975e60af2bcab049f80d0f2b7986d39b5f66fcecd6c52d53b6921"
+    },
+    {
+      "path": "pkb/answers.py",
+      "bytes": 31127,
+      "sha256": "36133425856172ce2b0ec36340d0e337c18dffca81246d9787ac3886fb65e268"
+    },
+    {
+      "path": "pkb/backup.py",
+      "bytes": 19650,
+      "sha256": "60b55bc22e65204b070483994238bf067dc6d70da8c1015c103b7c3503a4d7d7"
+    },
+    {
+      "path": "pkb/calibrate.py",
+      "bytes": 3521,
+      "sha256": "c3d22bf687744e4cd2a87a4feefd38f9a518055e8576cfff6ab58227ae9d80ab"
+    },
+    {
+      "path": "pkb/config.py",
+      "bytes": 487,
+      "sha256": "815de491b0af831f7bff471ccb7285d3fb6b5216d309be5c83b43acded1c0015"
+    },
+    {
+      "path": "pkb/embedding.py",
+      "bytes": 29234,
+      "sha256": "627ed7ad59bc5ddfb6ec6a07b94345d93d697bd2855cc93edb0c5e02a1d5d9fc"
+    },
+    {
+      "path": "pkb/evidence_pipeline.py",
+      "bytes": 25549,
+      "sha256": "c912b2c9980e9ba3d229f565f7214e00d81e4cf128c1c4cd3c9a1d0098486b5c"
+    },
+    {
+      "path": "pkb/evidence_review.py",
+      "bytes": 20445,
+      "sha256": "47b0f74c06b0dcca7792425568e67f95fbfd84f8440def66d7018f23806339e5"
+    },
+    {
+      "path": "pkb/extract.py",
+      "bytes": 3321,
+      "sha256": "da3d56912c35cc6d37aea231f336c7afc6e3305dd6972a57f4c9dd00dd73fcf1"
+    },
+    {
+      "path": "pkb/memories.py",
+      "bytes": 11814,
+      "sha256": "f51b8f996ea695d038f9769628fb80f7732d7aaefc5367ee8f6376b0e11b001d"
+    },
+    {
+      "path": "pkb/migration.py",
+      "bytes": 10448,
+      "sha256": "c181040268f066116cab8b2c0b2797509209d8e86623e344fc2c3414ea20986e"
+    },
+    {
+      "path": "pkb/review_measure.py",
+      "bytes": 6800,
+      "sha256": "d2d41fe3fd55093c19cfc95296eb28794884e35593abb07e52bfedf26e476e9d"
+    },
+    {
+      "path": "pkb/server.py",
+      "bytes": 13283,
+      "sha256": "f8f28559c5f281ae2115483b30eec2fc1edd3fb99739c43a1a4d6229605d74bd"
+    },
+    {
+      "path": "pkb/static/app.js",
+      "bytes": 22033,
+      "sha256": "4e1690159244e6061d082c080dcad705ba4472dc9db4be08f754441aad314bb6"
+    },
+    {
+      "path": "pkb/static/index.html",
+      "bytes": 5013,
+      "sha256": "76ace3e7fbc559686dc74160c38311e486c0a7a800dbdef170279aaa216241b2"
+    },
+    {
+      "path": "pkb/static/style.css",
+      "bytes": 4911,
+      "sha256": "cfb0eb62e377019210d10246097faca4c470e79f670d777b596b1f72a4c19379"
+    },
+    {
+      "path": "pkb/store.py",
+      "bytes": 23655,
+      "sha256": "675346c630318d22dfd71bfd8af86e4d38afb5273ebf17de33625be6e0eec168"
+    }
+  ],
+  "reference_evidence": [
+    {
+      "path": "docs/testing/S2R2-v10-result-review/report.md",
+      "sha256": "d31e87f394cd90131d1068928d8ecacdb5bc8e43dfeda5726c6bb2889f1d80a8"
+    },
+    {
+      "path": "docs/testing/S2R2-v10-result-review/result.json",
+      "sha256": "022d29132dfeada3ab05aa5f5a7fc880a1e6d53daa270fa323eab8c6edd27303"
+    },
+    {
+      "path": "docs/testing/S2R3-evidence-gate-v3-391baf9/case-registry.json",
+      "sha256": "5770842da90bcca2d42048e19ef0a7510c7edeb7dd4b86e61d899467877faf47"
+    },
+    {
+      "path": "docs/testing/S2R3-run-v3-391baf9/report.md",
+      "sha256": "8bc1374fa7e3e4861778a840bb877e32cd7ba6d2ce5b6fd2360f7c8038044699"
+    }
+  ],
+  "embedding_model_sha256": "06507c7b42688469c4e7298b0a1e16deff06caf291cf0a5b278c308249c3e439",
+  "additional_test_owned_freeze_inputs": [
+    "assembly module and explicit test-double implementation/manifest",
+    "new profile/registry/fixtures/labels/entry/supervisor/preflight and external witness",
+    "actual existing embedding runtime binary, model artifact and invocation/environment",
+    "selected Python interpreter and dependencies/platform",
+    "any media extractor binary/script only if separately approved and used"
+  ],
+  "do_not_treat_reference_evidence_as_new_candidate_execution": true,
+  "tests_executed_by_development": 0
+}
