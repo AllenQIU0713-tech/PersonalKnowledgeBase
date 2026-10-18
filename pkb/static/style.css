@@ -5,3 +5,4 @@
 .confirmation{min-width:0;overflow-wrap:anywhere}.cloud-destination{word-break:break-word}
 .preview-status{min-height:1.65em;margin:10px 0 4px}.preview-result-title{scroll-margin-top:24px;margin-top:18px}@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto!important}}
 .semantic-status{border:1px solid #c8d5e3;background:#f4f8fc;border-radius:10px;padding:12px 14px;margin:12px 0}.semantic-status p{margin:.35rem 0 0}
+.result-identifiers{overflow-wrap:anywhere}.semantic-result[aria-current="true"]{border-color:var(--blue);background:var(--wash)}.semantic-match{outline:2px solid var(--blue);outline-offset:4px;background:#f4f8fc;scroll-margin-block:24px}

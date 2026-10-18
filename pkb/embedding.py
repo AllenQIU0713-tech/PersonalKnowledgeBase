@@ -349,7 +349,8 @@ class Embeddings:
         index_status = self.status()
         browse_status = index_status['browse']
         if browse_status['state'] == 'no_evidence':
-            return [], browse_status
+            return [], dict(browse_status, result_limit=limit,
+                            per_document_limit=MAX_PER_DOCUMENT)
         if browse_status['state'] != 'ready':
             raise SemanticUnavailable(browse_status['reason'])
         try:
@@ -409,7 +410,9 @@ class Embeddings:
             })
         return results, {'state': 'ready', 'reason': '按本地余弦相似度排序',
                          'indexed': browse_status['indexed'],
-                         'eligible': browse_status['eligible']}
+                         'eligible': browse_status['eligible'],
+                         'result_limit': limit,
+                         'per_document_limit': MAX_PER_DOCUMENT}
 
     def _exact_features(self, query, row):
         normalized_query = _normalized(query)

@@ -1,5 +1,6 @@
 'use strict';
 let csrf = '', selectedFile = null, answerPreview = null, confirmationToken = null, previewRequestSequence = 0, qaAvailable = false;
+let semanticRequestSequence = 0, semanticResponseRevision = 0, detailRequestSequence = 0;
 const $ = id => document.getElementById(id);
 const statusLabels = {ready:'正文已解析', unparsed:'正文尚未解析', failed:'解析失败', queued:'等待解析', processing:'正在解析'};
 const questionLabels={ready:'可用于提问',review:'待核对',inactive:'已停用',conflict:'存在冲突',blocked_source:'来源不可用'};
@@ -13,14 +14,106 @@ $('drop').addEventListener('dragover',e=>e.preventDefault());
 $('drop').addEventListener('drop',run(e=>chooseFile(e.dataTransfer.files[0])));
 $('text').addEventListener('paste',e=>{const files=e.clipboardData.files;if(files.length){e.preventDefault();try{chooseFile(files[0]);}catch(err){notice(err.message,true);}}});
 async function bytes64(bytes){let s='';for(let i=0;i<bytes.length;i+=8192)s+=String.fromCharCode(...bytes.subarray(i,i+8192));return btoa(s);}
-$('collect-form').addEventListener('submit',run(async()=>{const button=$('collect-form').querySelector('button');button.disabled=true;try{if(selectedFile&&$('text').value.trim())throw Error('请分别保存文字和文件，避免遗漏其中一份');if(!selectedFile&&!$('text').value.trim())throw Error('请输入文字或选择文件');const bytes=selectedFile?new Uint8Array(await selectedFile.arrayBuffer()):new TextEncoder().encode($('text').value);await api('/api/documents',{title:$('title').value,filename:selectedFile?selectedFile.name:'note.txt',data:await bytes64(bytes),tags:$('tags').value.split(/[,，]/).map(t=>t.trim()).filter(Boolean),privacy:$('privacy').value,event_time:$('event-time').value});$('collect-form').reset();selectedFile=null;$('filename').textContent='';notice('已保存到本机。');}finally{button.disabled=false;}}));
+$('collect-form').addEventListener('submit',run(async()=>{const button=$('collect-form').querySelector('button');button.disabled=true;try{if(selectedFile&&$('text').value.trim())throw Error('请分别保存文字和文件，避免遗漏其中一份');if(!selectedFile&&!$('text').value.trim())throw Error('请输入文字或选择文件');const bytes=selectedFile?new Uint8Array(await selectedFile.arrayBuffer()):new TextEncoder().encode($('text').value);await api('/api/documents',{title:$('title').value,filename:selectedFile?selectedFile.name:'note.txt',data:await bytes64(bytes),tags:$('tags').value.split(/[,，]/).map(t=>t.trim()).filter(Boolean),privacy:$('privacy').value,event_time:$('event-time').value});invalidateSemanticBrowse('资料已保存，请重新语义查找以查看最新结果。',true);$('collect-form').reset();selectedFile=null;$('filename').textContent='';notice('已保存到本机。');}finally{button.disabled=false;}}));
 async function search(){const params=new URLSearchParams({query:$('query').value,tag:$('filter-tag').value,since:$('since').value,until:$('until').value});const data=await api('/api/documents?'+params);$('search-mode').textContent='精确查找 · 可在语义查找未就绪时继续使用';$('results').replaceChildren();if(!data.items.length)$('results').append(el('p','没有匹配资料。换一个关键词，或先添加资料。','hint'));for(const item of data.items){const b=el('button',undefined,'result');b.append(el('strong',item.title),el('span',(item.event_time||item.created).slice(0,10)+' · '+(item.privacy==='local'?'禁止外发':'提问时可用')+' · '+statusLabels[item.status],'meta'),el('span',item.excerpt,'excerpt'));b.addEventListener('click',run(()=>detail(item.id)));$('results').append(b);}}
 $('search-form').addEventListener('submit',run(search));
-function browseQuestionState(item){if(item.privacy==='local')return '仅供本地查阅 · 禁止外发';if(item.question_state==='ready')return '可用于提问';return '仅供本地查阅 · '+(questionLabels[item.question_state]||'不可用于提问');}
-async function semanticBrowse(){const query=$('semantic-query').value.trim();const resultBox=$('semantic-results');const statusBox=$('semantic-browse-status');resultBox.replaceChildren();if(!query){statusBox.textContent='请输入自然语言描述。';return;}statusBox.textContent='正在进行本地语义查找…';try{const data=await api('/api/documents/semantic-search?'+new URLSearchParams({query}));if(data.semantic.state==='no_evidence'){statusBox.textContent=data.semantic.reason;return;}statusBox.textContent='本地语义查找已就绪 · '+data.items.length+' 个片段 · 只在本机显示';if(!data.items.length)resultBox.append(el('p','没有找到已解析且来源有效的资料片段。','hint'));for(const [index,item] of data.items.entries()){const button=el('button',undefined,'result');button.append(el('strong',item.title),el('span','['+(index+1)+'] '+item.source_label+' · '+browseQuestionState(item)+' · 余弦 '+item.semantic_similarity.toFixed(4),'meta'),el('span',item.excerpt,'excerpt'));button.addEventListener('click',run(()=>detail(item.document_id)));resultBox.append(button);}}catch(error){statusBox.textContent='本地语义查找已暂停：'+error.message+'。精确查找仍可使用。';}}
+function browseQuestionState(item){
+  const privacy=item.privacy==='local'?'仅供本地查阅 · 禁止外发':'本地阅读候选';
+  const state=item.question_state==='ready'?'未核实为答案':(questionLabels[item.question_state]||'不可用于提问');
+  return privacy+' · '+state;
+}
+function semanticIsCurrent(sequence,query){return sequence===semanticRequestSequence&&$('semantic-query').value.trim()===query;}
+function clearSemanticSelection(){
+  for(const node of document.querySelectorAll('.semantic-match'))node.classList.remove('semantic-match');
+  for(const node of document.querySelectorAll('#semantic-results [aria-current]'))node.removeAttribute('aria-current');
+}
+function invalidateSemanticBrowse(message='资料已变化，请重新语义查找。',documentsChanged=false){
+  semanticRequestSequence++;
+  if(documentsChanged)detailRequestSequence++;
+  clearSemanticSelection();
+  $('semantic-results').replaceChildren();
+  $('semantic-query-status').textContent=message;
+}
+function semanticScope(status){
+  if(!Number.isInteger(status.result_limit)||status.result_limit<1||!Number.isInteger(status.per_document_limit)||status.per_document_limit<1)throw Error('检索返回范围信息无效，请重新查找。');
+  return '本次最多 '+status.result_limit+' 个片段，每份资料最多 '+status.per_document_limit+' 个；不是全库全部片段。';
+}
+async function semanticBrowse(){
+  const query=$('semantic-query').value.trim(),sequence=++semanticRequestSequence;
+  const resultBox=$('semantic-results'),statusBox=$('semantic-query-status');
+  clearSemanticSelection();
+  resultBox.replaceChildren();
+  if(!query||query.length>2000){statusBox.textContent='请输入 1–2000 字的自然语言描述。';return;}
+  statusBox.textContent='正在查找可供人工比较的相关片段…';
+  try{
+    const data=await api('/api/documents/semantic-search?'+new URLSearchParams({query}));
+    if(!semanticIsCurrent(sequence,query))return;
+    semanticResponseRevision++;
+    const scope=semanticScope(data.semantic);
+    if(data.semantic.state==='no_evidence'){
+      statusBox.textContent=data.semantic.reason+' · '+scope;
+      return;
+    }
+    if(data.semantic.state!=='ready')throw Error(data.semantic.reason||'本地语义查找未就绪');
+    $('semantic-browse-status').textContent='本地语义查找已就绪 · '+data.semantic.reason+' · 已索引 '+data.semantic.indexed+'/'+data.semantic.eligible+'。此状态独立于问答状态。';
+    statusBox.textContent='显示 '+data.items.length+' 个本地候选 · '+scope+' 相关性由你判断。';
+    if(!data.items.length)resultBox.append(el('p','没有可供本地查阅的已解析有效片段。','hint'));
+    for(const item of data.items){
+      const button=el('button',undefined,'result semantic-result');
+      button.dataset.documentId=item.document_id;
+      button.dataset.chunkId=item.chunk_id;
+      button.setAttribute('aria-controls','detail');
+      button.append(el('strong',item.title),
+        el('span','['+item.rank+'] '+item.source_label+' · '+browseQuestionState(item)+' · '+(statusLabels[item.status]||item.status)+' · 余弦相似度 '+item.semantic_similarity.toFixed(4),'meta'),
+        el('span','资料 ID '+item.document_id+' · 片段 ID '+item.chunk_id+(item.page?' · 第 '+item.page+' 页':''),'meta result-identifiers'),
+        el('span','内容版本 '+item.content_version+' · 资格版本 '+item.qualification_version,'meta'),
+        el('span','摘录（非全文，最多400字）：\n'+item.excerpt,'excerpt'));
+      button.addEventListener('click',run(()=>detail(item.document_id,{item,sequence,query,button})));
+      resultBox.append(button);
+    }
+  }catch(error){
+    if(!semanticIsCurrent(sequence,query))return;
+    semanticResponseRevision++;
+    resultBox.replaceChildren();
+    statusBox.textContent='本地语义查找已暂停：'+error.message+'。精确查找仍可使用。';
+    $('semantic-browse-status').textContent='本次语义查找未完成，没有返回新候选。';
+  }
+}
 $('semantic-search-form').addEventListener('submit',run(semanticBrowse));
-async function detail(id){const item=await api('/api/documents/'+id);const panel=$('detail');panel.replaceChildren(el('h2',item.title),el('p',item.filename+' · '+statusLabels[item.status]+' · '+(item.privacy==='local'?'仅可本地查找':(questionLabels[item.question_state]||item.question_state))+' · 标识 '+item.id,'hint'));if(item.source_type==='legacy_memory'){panel.append(el('p','由旧个人记忆无损迁移 · 原状态 '+item.legacy_status+' · 旧标识 '+item.legacy_id,'hint'));const snapshot=item.legacy_snapshot||{};panel.append(el('p','已保留原始时间、来源、冲突与历史：历史 '+(snapshot.history?.length||0)+' 条，冲突 '+(snapshot.conflicts?.length||0)+' 条。','hint'));}if(item.question_reason)panel.append(el('p',item.question_reason,'danger'));if(item.source_ids?.length)panel.append(el('p','来源资料：'+item.source_ids.join('、'),'hint'));if(item.error)panel.append(el('p',item.error,'danger'));const actions=el('div',undefined,'actions');const link=el('a','下载原件');link.href='/api/documents/'+id+'/original';actions.append(link);const privacy=el('button',item.privacy==='local'?'改为提问时允许外发':'设为禁止外发');privacy.onclick=run(async()=>{await api('/api/documents/'+id+'/privacy',{privacy:item.privacy==='local'?'allowed':'local'});await detail(id);await search();});actions.append(privacy);if(/\.(txt|md|markdown|csv|json)$/i.test(item.filename)){const edit=el('button','修改文字资料');edit.onclick=run(async()=>{const title=prompt('修改标题',item.title);if(title===null)return;const text=prompt('修改正文',item.chunks.map(c=>c.text).join('\n'));if(text===null)return;await api('/api/documents/'+id+'/update',{title,text,tags:item.tags});await detail(id);await search();await refreshSemanticStatus();});actions.append(edit);}if(item.source_type==='legacy_memory'){const state=el('button',item.question_state==='ready'?'停用提问资格':'核对并启用提问');state.onclick=run(async()=>{await api('/api/documents/'+id+'/question-state',{state:item.question_state==='ready'?'inactive':'ready'});await detail(id);await refreshSemanticStatus();});actions.append(state);}const del=el('button','删除资料','danger');del.onclick=run(async()=>{if(!confirm('删除这份资料及其索引？此操作不可撤销。'))return;const result=await api('/api/documents/'+id+'/delete',{});panel.replaceChildren(el('p',result.cleanup_pending?'资料已从检索移除，原件待清理；请在收集页重试。':'资料已删除'));await loadCleanup();await search();});actions.append(del);if(['failed','unparsed'].includes(item.status)){const retry=el('button','重试本地解析');retry.onclick=run(async()=>{await api('/api/documents/'+id+'/retry',{});await detail(id);});actions.append(retry);}panel.append(actions);for(const chunk of item.chunks){const node=el('div',undefined,'chunk');node.id='chunk-'+chunk.id;node.append(el('small',(chunk.page?'第 '+chunk.page+' 页 · ':'')+'片段 '+chunk.position),el('span',chunk.text));panel.append(node);}}
-for(const button of document.querySelectorAll('nav button'))button.addEventListener('click',run(async()=>{for(const view of document.querySelectorAll('.view'))view.hidden=view.id!==button.dataset.view;for(const b of document.querySelectorAll('nav button'))b.classList.toggle('active',b===button);$('heading').textContent={collect:'把值得记住的留下来',find:'从过去的记录里找答案'}[button.dataset.view];if(button.dataset.view==='find'){await search();await refreshSemanticStatus();}if(button.dataset.view==='collect')await loadCleanup();}));
+$('semantic-query').addEventListener('input',()=>invalidateSemanticBrowse('描述已变化，重新查找后显示本次候选。'));
+async function detail(id,match=null){
+  const sequence=++detailRequestSequence;
+  const current=()=>sequence===detailRequestSequence&&(!match||semanticIsCurrent(match.sequence,match.query));
+  let item;
+  try{item=await api('/api/documents/'+id);}
+  catch(error){
+    if(!current())return null;
+    if(!match)throw error;
+    invalidateSemanticBrowse('无法读取这条候选的当前原文，请重新查找：'+error.message);
+    $('detail').replaceChildren(el('h2','候选已不可用'),el('p','请重新查找后选择当前有效片段。','hint'));
+    return null;
+  }
+  if(!current())return null;
+  if(match&&(!Number.isInteger(match.item.content_version)||!Number.isInteger(match.item.qualification_version)||
+    item.content_version!==match.item.content_version||item.qualification_version!==match.item.qualification_version||
+    item.status!=='ready'||!item.chunks.some(chunk=>chunk.id===match.item.chunk_id))){
+    invalidateSemanticBrowse('候选的内容、隐私或来源状态已变化，请重新查找。');
+    $('detail').replaceChildren(el('h2','资料已变化'),el('p','旧片段不再作为本次命中，请重新查找。','hint'));
+    return null;
+  }
+  clearSemanticSelection();
+  renderDetail(item);
+  if(match){
+    const target=document.getElementById('chunk-'+match.item.chunk_id);
+    match.button.setAttribute('aria-current','true');
+    target.classList.add('semantic-match');
+    target.focus({preventScroll:true});
+    target.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'center'});
+  }
+  return item;
+}
+function renderDetail(item){const id=item.id;const panel=$('detail');panel.replaceChildren(el('h2',item.title),el('p',item.filename+' · '+statusLabels[item.status]+' · '+browseQuestionState(item)+' · 标识 '+item.id,'hint'));panel.append(el('p',(item.source_type==='legacy_memory'?'迁移自个人记忆':'收集资料')+' · 内容版本 '+item.content_version+' · 资格版本 '+item.qualification_version,'meta'));if(item.source_type==='legacy_memory'){panel.append(el('p','由旧个人记忆无损迁移 · 原状态 '+item.legacy_status+' · 旧标识 '+item.legacy_id,'hint'));const snapshot=item.legacy_snapshot||{};panel.append(el('p','已保留原始时间、来源、冲突与历史：历史 '+(snapshot.history?.length||0)+' 条，冲突 '+(snapshot.conflicts?.length||0)+' 条。','hint'));}if(item.question_reason)panel.append(el('p',item.question_reason,'danger'));if(item.source_ids?.length)panel.append(el('p','来源资料：'+item.source_ids.join('、'),'hint'));if(item.error)panel.append(el('p',item.error,'danger'));const actions=el('div',undefined,'actions');const link=el('a','下载原件');link.href='/api/documents/'+id+'/original';actions.append(link);const privacy=el('button',item.privacy==='local'?'改为提问时允许外发':'设为禁止外发');privacy.onclick=run(async()=>{await api('/api/documents/'+id+'/privacy',{privacy:item.privacy==='local'?'allowed':'local'});invalidateSemanticBrowse('隐私设置已变化，请重新语义查找。',true);await detail(id);await search();});actions.append(privacy);if(/\.(txt|md|markdown|csv|json)$/i.test(item.filename)){const edit=el('button','修改文字资料');edit.onclick=run(async()=>{const title=prompt('修改标题',item.title);if(title===null)return;const text=prompt('修改正文',item.chunks.map(c=>c.text).join('\n'));if(text===null)return;await api('/api/documents/'+id+'/update',{title,text,tags:item.tags});invalidateSemanticBrowse('资料已修改，旧片段已清除，请等待索引就绪后重新查找。',true);await detail(id);await search();await refreshSemanticStatus();});actions.append(edit);}if(item.source_type==='legacy_memory'){const state=el('button',item.question_state==='ready'?'停用提问资格':'核对并启用提问');state.onclick=run(async()=>{await api('/api/documents/'+id+'/question-state',{state:item.question_state==='ready'?'inactive':'ready'});invalidateSemanticBrowse('资料状态已变化，请重新语义查找。',true);await detail(id);await refreshSemanticStatus();});actions.append(state);}const del=el('button','删除资料','danger');del.onclick=run(async()=>{if(!confirm('删除这份资料及其索引？此操作不可撤销。'))return;const result=await api('/api/documents/'+id+'/delete',{});invalidateSemanticBrowse('资料及依赖来源已变化，旧候选已清除，请重新查找。',true);panel.replaceChildren(el('p',result.cleanup_pending?'资料已从检索移除，原件待清理；请在收集页重试。':'资料已删除'));await loadCleanup();await search();});actions.append(del);if(['failed','unparsed'].includes(item.status)){const retry=el('button','重试本地解析');retry.onclick=run(async()=>{await api('/api/documents/'+id+'/retry',{});invalidateSemanticBrowse('资料正在重新解析，请等待索引就绪后重新查找。',true);await detail(id);});actions.append(retry);}panel.append(actions);for(const chunk of item.chunks){const node=el('div',undefined,'chunk');node.id='chunk-'+chunk.id;node.tabIndex=-1;node.append(el('small',(chunk.page?'第 '+chunk.page+' 页 · ':'')+'片段 '+chunk.position+' · ID '+chunk.id),el('span',chunk.text));panel.append(node);}}
+for(const button of document.querySelectorAll('nav button'))button.addEventListener('click',run(async()=>{for(const view of document.querySelectorAll('.view'))view.hidden=view.id!==button.dataset.view;for(const b of document.querySelectorAll('nav button'))b.classList.toggle('active',b===button);$('heading').textContent={collect:'把值得记住的留下来',find:'查找相关资料，由你判断'}[button.dataset.view];if(button.dataset.view==='find'){await search();await refreshSemanticStatus();}if(button.dataset.view==='collect')await loadCleanup();}));
 api('/api/session').then(async s=>{csrf=s.csrf;$('storage').textContent=s.data_dir;$('cloud-model').value=s.cloud.model;$('cloud-status').textContent=s.cloud.configured?'DeepSeek 凭证已在本机配置。每次请求仍需单独预览并确认。':'尚未配置 DEEPSEEK_API_KEY；可以完成本地预览，但确认时不会发送。';await loadCleanup();await refreshSemanticStatus();const migrations=await api('/api/migrations');const latest=migrations.items.find(m=>m.name==='AUD-B3-001-clear-legacy-history-v2');if(latest&&(latest.answers_removed||latest.outbound_removed))notice('旧测试历史已清理：问答 '+latest.answers_removed+' 条，外发记录 '+latest.outbound_removed+' 条；原件保留，旧个人记忆已转为资料，旧表只读保留。');}).catch(e=>notice(e.message,true));
 
 function showSources(sources){const list=el('div');for(const [i,s] of sources.entries()){const b=el('button','['+(i+1)+'] '+s.title+' · '+s.source_label+(s.page?' · 第 '+s.page+' 页':''));b.onclick=run(async()=>{await detail(s.document_id);document.getElementById('chunk-'+s.chunk_id)?.scrollIntoView({behavior:'smooth'});});list.append(b);}return list;}
@@ -42,6 +135,6 @@ $('answer-history').onclick=run(async()=>{supersedePreview();const data=await ap
 $('outbound-history').onclick=run(async()=>{supersedePreview();const data=await api('/api/outbound');$('answer-result').replaceChildren();for(const a of data.items){const status=a.simulated?'模拟，未发送':({sending:'发送中或进程曾中断',failed:'失败，未自动重试',succeeded:'成功'}[a.status]||a.status);const p=el('p',a.created+' · '+a.provider+(a.model?' · '+a.model:'')+' · '+a.purpose+' · '+status,'hint'+(a.status==='failed'?' status-failed':''));$('answer-result').append(p);}if(!data.items.length)$('answer-result').append(el('p','没有外发记录。'));});
 
 
-async function refreshSemanticStatus(){const state=await api('/api/semantic/status');const qa=state.qa||{state:'blocked_by_missing_reviewer',available:false,reason:'本地证据复核状态不可用'};const box=$('semantic-status');const label={ready:'问答已就绪',blocked_by_missing_reviewer:'问答已暂停：缺少证据复核器',blocked_by_unqualified_reviewer:'问答已暂停：证据复核器未通过验证',blocked_by_semantic_index:'问答已暂停：语义索引未就绪',blocked_by_unimplemented_conflict_check:'问答已暂停：矛盾检测未完成'}[qa.state]||qa.state;box.replaceChildren(el('strong',label),el('p',qa.reason+' · 向量索引：'+state.reason+' · 已索引 '+state.indexed+'/'+state.eligible+'，未参与 '+state.excluded,'hint'));const browse=state.browse||{state:'service_unavailable',reason:'本地语义查找状态不可用',indexed:0,eligible:0};const browseLabel={ready:'本地语义查找已就绪',service_unavailable:'本地语义查找已暂停',indexing:'正在建立本地语义查找索引',index_error:'本地语义查找索引发生错误',no_evidence:'没有可语义查找的已解析资料'}[browse.state]||browse.state;$('semantic-browse-status').textContent=browseLabel+' · '+browse.reason+' · 已索引 '+browse.indexed+'/'+browse.eligible+'。此状态独立于问答状态。';qaAvailable=qa.available===true;for(const id of ['preview-answer','prepare-cloud','mock-answer'])$(id).disabled=!qaAvailable;if(['service_unavailable','index_error'].includes(state.state)){const retry=el('button','重试本地语义服务');retry.onclick=run(async()=>{await api('/api/semantic/retry',{});await refreshSemanticStatus();});box.append(retry);}}
+async function refreshSemanticStatus(){const browseSequence=semanticRequestSequence,browseRevision=semanticResponseRevision;const state=await api('/api/semantic/status');const qa=state.qa||{state:'blocked_by_missing_reviewer',available:false,reason:'本地证据复核状态不可用'};const box=$('semantic-status');const label={ready:'问答已就绪',blocked_by_missing_reviewer:'问答已暂停：缺少证据复核器',blocked_by_unqualified_reviewer:'问答已暂停：证据复核器未通过验证',blocked_by_semantic_index:'问答已暂停：语义索引未就绪',blocked_by_unimplemented_conflict_check:'问答已暂停：矛盾检测未完成'}[qa.state]||qa.state;box.replaceChildren(el('strong',label),el('p',qa.reason+' · 向量索引：'+state.reason+' · 已索引 '+state.indexed+'/'+state.eligible+'，未参与 '+state.excluded,'hint'));const browse=state.browse||{state:'service_unavailable',reason:'本地语义查找状态不可用',indexed:0,eligible:0};const browseLabel={ready:'本地语义查找已就绪',service_unavailable:'本地语义查找已暂停',indexing:'正在建立本地语义查找索引',index_error:'本地语义查找索引发生错误',no_evidence:'没有可语义查找的已解析资料'}[browse.state]||browse.state;if(browseSequence===semanticRequestSequence&&browseRevision===semanticResponseRevision){$('semantic-browse-status').textContent=browseLabel+' · '+browse.reason+' · 已索引 '+browse.indexed+'/'+browse.eligible+'。此状态独立于问答状态。';if(browse.state!=='ready')invalidateSemanticBrowse(browseLabel+' · '+browse.reason+'；精确查找仍可使用。');}qaAvailable=qa.available===true;for(const id of ['preview-answer','prepare-cloud','mock-answer'])$(id).disabled=!qaAvailable;if(['service_unavailable','index_error'].includes(state.state)){const retry=el('button','重试本地语义服务');retry.onclick=run(async()=>{await api('/api/semantic/retry',{});await refreshSemanticStatus();});box.append(retry);}}
 
 async function loadCleanup(){const data=await api('/api/cleanup');const box=$('cleanup');box.replaceChildren();box.hidden=!data.items.length;if(data.items.length)box.append(el('h2','原件待清理'));for(const item of data.items){box.append(el('p',item.id+' · '+item.error,'hint'));const retry=el('button','重试清理');retry.onclick=run(async()=>{await api('/api/documents/'+item.id+'/delete',{});await loadCleanup();});box.append(retry);}}
