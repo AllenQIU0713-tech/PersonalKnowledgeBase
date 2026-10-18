@@ -15,6 +15,7 @@ from .store import Store
 from .extract import Extractor
 from .embedding import Embeddings, SemanticUnavailable
 from .answers import Answers, CloudError
+from .evidence_pipeline import EvidenceUnavailable
 from .migration import LegacyMemoryMigration
 
 STATIC = Path(__file__).parent / 'static'
@@ -167,7 +168,7 @@ class Handler(BaseHTTPRequestHandler):
             self.route()
         except KeyError:
             self.respond(404, {'error': '资料不存在'})
-        except SemanticUnavailable as exc:
+        except (SemanticUnavailable, EvidenceUnavailable) as exc:
             self.respond(409, {'error': str(exc)[:300],
                                'semantic': semantic_status(self.server)})
         except (ValueError, TypeError, UnicodeError) as exc:
