@@ -375,6 +375,14 @@ class Store:
             db.execute('INSERT OR IGNORE INTO pending_cleanup VALUES (?,?,?,?)',(identifier,row['filename'] if row else '待清理原件','',now()))
             self.clean_answers(db, identifier)
             db.execute('INSERT OR REPLACE INTO tombstones VALUES (?,?)', (identifier, now()))
+            if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='memory_sources'").fetchone():
+                # Keep the old lineage without a live foreign-key reference to
+                # the source being deleted. The existing restore ledger is
+                # also consumed by migration/backup; memory bodies stay intact.
+                db.execute('''INSERT OR IGNORE INTO legacy_restore_sources (memory_id,source_document_id)
+                              SELECT memory_id,document_id FROM memory_sources WHERE document_id=?''',
+                           (identifier,))
+                db.execute('DELETE FROM memory_sources WHERE document_id=?', (identifier,))
             db.execute('DELETE FROM documents WHERE id=?', (identifier,))
             self.refresh_dependents(db, identifier)
         return self.finish_delete(identifier)
@@ -426,6 +434,6 @@ class Store:
                     db.execute('DELETE FROM cloud_requests WHERE id=?', (row['id'],))
 
     def clean_memories(self, db, identifier):
-        # Legacy memory rows are recovery evidence. Source changes invalidate the
-        # migrated document through document_sources; old tables stay read-only.
+        # Legacy memory bodies/history are recovery evidence. Deleted source
+        # references remain in legacy_restore_sources rather than blocking deletion.
         self.refresh_dependents(db, identifier)
