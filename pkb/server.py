@@ -2,6 +2,7 @@ import argparse
 import fcntl
 import base64
 import hmac
+import html
 import json
 import mimetypes
 import secrets
@@ -54,6 +55,33 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:
             return False
 
+    def safe_navigation_entry(self):
+        """A 403 landing page, not an authentication or Fetch-Site exception."""
+        if (self.command != 'GET' or self.headers.get('Sec-Fetch-Mode') != 'navigate'
+                or self.headers.get('Sec-Fetch-Dest') != 'document'):
+            return None
+        try:
+            parsed = urllib.parse.urlsplit(self.path)
+            if parsed.path == '/unlock':
+                token = urllib.parse.parse_qs(parsed.query).get('token', [''])[0]
+                if not (1 <= len(token) <= 256 and token.isascii()
+                        and all(c.isalnum() or c in '-_' for c in token)):
+                    return None
+                target = '/unlock?' + urllib.parse.urlencode({'token': token})
+            elif parsed.path == '/':
+                target = '/'
+            else:
+                return None
+        except ValueError:
+            return None
+        return ("<!doctype html><html lang=\"zh-CN\"><meta charset=\"utf-8\">"
+                "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
+                "<title>本机知识库安全入口</title><main><h1>从本机页面继续</h1>"
+                "<p>外部导航尚未解锁知识库。下面的链接仅指向本机，仍会验证一次性凭证和会话。</p>"
+                '<p><a href="' + html.escape(target, quote=True) + '">继续打开本机知识库</a></p>'
+                "<p>只需点击一次；如提示链接失效，请使用本次服务新生成的启动链接。</p>"
+                "</main></html>").encode('utf-8')
+
     def route(self):
         if self.headers.get('Host') != self.server.authority:
             return self.respond(403, {'error': '只允许本机地址访问'})
@@ -61,6 +89,9 @@ class Handler(BaseHTTPRequestHandler):
         if origin and origin != self.server.origin:
             return self.respond(403, {'error': '拒绝跨站请求'})
         if self.headers.get('Sec-Fetch-Site') in ('cross-site', 'same-site'):
+            entry = self.safe_navigation_entry()
+            if entry is not None:
+                return self.respond(403, entry, 'text/html; charset=utf-8')
             return self.respond(403, {'error': '拒绝跨站请求'})
         parsed = urllib.parse.urlsplit(self.path)
         path = parsed.path
