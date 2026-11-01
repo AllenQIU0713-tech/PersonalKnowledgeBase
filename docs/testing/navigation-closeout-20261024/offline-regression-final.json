@@ -1,0 +1,36 @@
+{
+  "timestamp": "2026-10-25T07:58:54.552433+00:00",
+  "scope": "offline current-dialogue self-check; no model/network/browser",
+  "results": [
+    {
+      "test": "test_ar_tools.py",
+      "exit_code": 0,
+      "stdout": "{\"scope\": \"actual synthetic observation/gate/control and optimized/missing-entry zero-start checks\", \"checks\": 39, \"passed\": 39, \"candidate_model_network_UI_started\": false}\n",
+      "stderr": ""
+    },
+    {
+      "test": "test_ar_dual_clock.py",
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "test_acknowledged_session_mono (__main__.DualClock) ... ok\ntest_bounded_same_process_diagnostics (__main__.DualClock) ... ok\ntest_cancel_finish_preserves_expiry (__main__.DualClock) ... ok\ntest_exact_mono (__main__.DualClock) ... ok\ntest_exact_wall (__main__.DualClock) ... ok\ntest_finish_does_not_shortcircuit (__main__.DualClock) ... ok\ntest_mono_regression (__main__.DualClock) ... ok\ntest_normal (__main__.DualClock) ... ok\ntest_progress_divergence (__main__.DualClock) ... ok\ntest_queue_resume (__main__.DualClock) ... ok\ntest_rollback (__main__.DualClock) ... ok\ntest_session_not_reset (__main__.DualClock) ... ok\ntest_unused_session_wall (__main__.DualClock) ... ok\ntest_wall_only_late_accept (__main__.DualClock) ... ok\n\n----------------------------------------------------------------------\nRan 14 tests in 0.001s\n\nOK\n"
+    },
+    {
+      "test": "test_ar_navigation_delivery.py",
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "test_cross_site_does_not_consume_bootstrap (__main__.NavigationDelivery) ... ok\ntest_observer_write_failure_does_not_mask_transport_failure (__main__.NavigationDelivery) ... ok\ntest_original_303_wire_and_observer_return (__main__.NavigationDelivery) ... ok\ntest_original_return_and_arguments_are_preserved (__main__.NavigationDelivery) ... ok\ntest_original_root_cookie_and_replay_policy (__main__.NavigationDelivery) ... ok\ntest_original_write_failure_is_rethrown_without_secret (__main__.NavigationDelivery) ... ok\ntest_reset_and_timeout_keep_original_exception (__main__.NavigationDelivery) ... ok\n\n----------------------------------------------------------------------\nRan 7 tests in 0.005s\n\nOK\n"
+    },
+    {
+      "test": "test_same_origin_entry.py",
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "test_api_remains_json_rejected (__main__.SameOriginEntry) ... ok\ntest_cross_site_post_remains_rejected (__main__.SameOriginEntry) ... ok\ntest_cross_site_stays_403_without_consuming_secret (__main__.SameOriginEntry) ... ok\ntest_following_same_origin_link_still_uses_one_time_guard (__main__.SameOriginEntry) ... ok\ntest_malicious_token_and_redirect_are_not_reflected (__main__.SameOriginEntry) ... ok\ntest_root_only_links_to_local_root (__main__.SameOriginEntry) ... ok\ntest_same_origin_post_still_requires_csrf (__main__.SameOriginEntry) ... ok\ntest_wrong_host_origin_and_iframe_do_not_get_entry (__main__.SameOriginEntry) ... ok\n\n----------------------------------------------------------------------\nRan 8 tests in 0.006s\n\nOK\n"
+    },
+    {
+      "test": "test_source_delete_closeout.py",
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "test_backup_restore_preserves_missing_source_lineage (__main__.SourceDelete) ... ok\ntest_delete_legacy_referenced_source (__main__.SourceDelete) ... ok\ntest_failed_transaction_restores_original_reference (__main__.SourceDelete) ... ok\ntest_plain_document_delete_still_works (__main__.SourceDelete) ... ok\ntest_real_delete_route_returns_200 (__main__.SourceDelete) ... ok\ntest_repeated_delete_is_idempotent (__main__.SourceDelete) ... ok\ntest_restart_and_migration_cannot_restore_deleted_source (__main__.SourceDelete) ... ok\ntest_source_and_dependent_cached_vectors_are_removed (__main__.SourceDelete) ... ok\ntest_store_without_legacy_tables (__main__.SourceDelete) ... ok\n\n----------------------------------------------------------------------\nRan 9 tests in 0.305s\n\nOK\n"
+    }
+  ]
+}
